@@ -160,25 +160,49 @@ def apply_pose(arm, pose):
     bpy.ops.object.mode_set(mode='OBJECT')
     print(f"[posed] {len(posed)} bone(s)", flush=True)
 
+def _role_delta_steps(spec):
+    """Normalize a role's rotation spec to an ordered list of (axis, deg).
+    Accepts BOTH the single-axis form {axis,deg} (back-compat) and the multi-axis
+    sequence [{axis,deg}, ...] — a real stance needs >1 axis per joint, so the
+    sequence is applied in order (each step is an OUTER world-axis rotation on top
+    of the prior). A bare list of [x,y,z,deg]-less dicts is tolerated too."""
+    if spec is None: return []
+    seq = spec if isinstance(spec, list) else [spec]
+    out = []
+    for s in seq:
+        if not isinstance(s, dict): continue
+        out.append((V(s.get("axis", [1, 0, 0])).normalized(), float(s.get("deg", 0))))
+    return out
+
 def apply_role_pose(arm, pose, rolemap):
     """Apply a Claude/MCP-authored canonical pose: per-role WORLD-axis delta rotations (Blender Z-up frame:
-    X=left/right, Y=depth/-Y-forward, Z=up), resolved to bones via the roleMap, applied FK parent-first, then
-    baked as rest. World-axis deltas port cleanly (no bone-axis issue) and are authorable WITHOUT the editor."""
+    X=left/right, Y=depth/-Y-forward, Z=up), resolved to bones via the roleMap, applied FK parent-first.
+    World-axis deltas port cleanly (no bone-axis issue) and are authorable WITHOUT the editor.
+    Each role may carry a SEQUENCE of {axis,deg} (multi-axis) — required for real stances; a single
+    {axis,deg} still works. Steps for one bone share the bone's (posed) head, so composing the rotations
+    and applying once about that head is exact (rotations about a fixed point compose: piv(R2,h)piv(R1,h)=piv(R2R1,h))."""
     rr = pose.get("roleRotations", {})
     items = [(role, rolemap.get(role)) for role in rr if rolemap.get(role) in arm.pose.bones]
     if not items: return
-    items.sort(key=lambda it: _bone_depth(arm, it[1]))
+    items.sort(key=lambda it: _bone_depth(arm, it[1]))                         # parent-first: children inherit posed parents
+    Rarm_inv = arm.matrix_world.to_3x3().inverted()                            # world-axis -> armature space (identity for this rig)
     bpy.ops.object.select_all(action='DESELECT'); arm.select_set(True); bpy.context.view_layer.objects.active = arm
     bpy.ops.object.mode_set(mode='POSE')
+    nstep = 0
     for role, bname in items:
-        spec = rr[role]; axis = V(spec.get("axis", [1, 0, 0])).normalized(); deg = float(spec.get("deg", 0))
-        delta = mathutils.Matrix.Rotation(math.radians(deg), 3, axis)         # world-axis rotation (Blender Z-up)
-        bpy.context.view_layer.update()
+        steps = _role_delta_steps(rr[role])
+        if not steps: continue
+        composed = mathutils.Matrix.Identity(3)
+        for axis, deg in steps:                                               # later step = outer (world) rotation
+            a = (Rarm_inv @ axis).normalized()
+            composed = mathutils.Matrix.Rotation(math.radians(deg), 3, a) @ composed
+            nstep += 1
+        bpy.context.view_layer.update()                                       # read the parent-posed head
         pb = arm.pose.bones[bname]; cur = pb.matrix.copy()
-        new = (delta @ cur.to_3x3()).to_4x4(); new.translation = cur.translation   # premultiply world delta; keep FK head
+        new = (composed @ cur.to_3x3()).to_4x4(); new.translation = cur.translation   # rotate about the FK head; keep it
         pb.matrix = new
     bpy.ops.object.mode_set(mode='OBJECT')
-    print(f"[posed-roles] {len(items)} role(s): {[r for r, _ in items]}", flush=True)
+    print(f"[posed-roles] {len(items)} role(s) {nstep} step(s): {[r for r, _ in items]}", flush=True)
 
 def rig_character(char_glb, block, assets, out):
     bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -199,9 +223,10 @@ def rig_character(char_glb, block, assets, out):
         for _m in [o for o in bpy.context.scene.objects if o.type == "MESH"]:
             _am = [md for md in _m.modifiers if md.type == "ARMATURE"]
             if _am:
+                _am[0].use_deform_preserve_volume = True                  # DQS bake: dual-quaternion skinning avoids the LBS candy-wrapper collapse
                 bpy.ops.object.select_all(action='DESELECT'); _m.select_set(True); bpy.context.view_layer.objects.active = _m
-                try: bpy.ops.object.modifier_apply(modifier=_am[0].name)
-                except Exception as e: print(f"[pose] modifier_apply warn: {e}", flush=True)
+                try: bpy.ops.object.modifier_apply(modifier=_am[0].name)   #   at bent joints (Kavan et al. 2008, DOI 10.1145/1409625.1409627). UniRig emits standard LBS
+                except Exception as e: print(f"[pose] modifier_apply warn: {e}", flush=True)   #   weights (arXiv:2504.12451), so the raw bake tears the elbow past ~85deg; ROM is capped in the pose too.
     for w in block.get("weapons", []):
         place_v4(w, arm, assets) if "rootTransform" in w else place(w, arm, figureH, assets)
     for o in [m for m in list(bpy.context.scene.objects) if m.type == "MESH" and len(m.data.vertices) < 300]:
