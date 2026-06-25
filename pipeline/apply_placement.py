@@ -70,8 +70,14 @@ def place(w, arm, figureH, assets):
     # not tails, so the meaningful positions go in the heads (KB rigging: the tip joint feeds hit-box / tip-velocity).
     Minv = arm.matrix_world.inverted(); apw = V((ap[0], ap[1], ap[2]))
     MW = mathutils.Matrix.Translation(apw) @ mathutils.Euler((0, math.radians(w.get("rotationDeg", 0)), 0), 'XYZ').to_matrix().to_4x4()
-    tipw = max((MW @ v.co for v in hal.data.vertices), key=lambda p: (p - apw).length)  # weapon's far end = business tip
-    grip_local = Minv @ apw; tip_local = Minv @ tipw   # TODO: refine via the editor's tipAnchor when v3 ships
+    tA = w.get("tipAnchor")
+    if tA:                                              # editor's explicit tip: image-v maps to haft height
+        c = co(hal); Hloc = c[:, 2].max() - c[:, 2].min()
+        tip_z = (w.get("gripAnchor", [0.5, 0.5])[1] - tA[1]) * Hloc
+        tipw = MW @ V((0.0, 0.0, tip_z))                # on the haft axis at the tip height (grip is at z=0 local)
+    else:                                               # fallback: weapon's far end from the grip
+        tipw = max((MW @ v.co for v in hal.data.vertices), key=lambda p: (p - apw).length)
+    grip_local = Minv @ apw; tip_local = Minv @ tipw
     d = tip_local - grip_local; L = d.length; d = d / L if L > 1e-5 else V((0, 0, 1))
     bpy.context.view_layer.objects.active = arm; bpy.ops.object.mode_set(mode='EDIT')
     eb = arm.data.edit_bones; hb = eb[bone]; gn = "weapon_grip_" + asset; tn = "weapon_tip_" + asset

@@ -135,6 +135,15 @@
   .scalebar .z{color:var(--dim2)}
   .zhint{position:absolute;right:12px;top:10px;font-family:var(--mono);font-size:10px;color:var(--dim2);
     background:rgba(20,20,24,.62);border:1px solid var(--border);border-radius:5px;padding:5px 9px;pointer-events:none}
+  .snapstep{width:60px;height:24px;background:var(--panel2);border:1px solid var(--border);border-radius:4px;color:var(--text);
+    font-family:var(--mono);font-size:11px;padding:0 7px;text-align:center}
+  .snapstep:focus{outline:none;border-color:var(--amber)}
+  .snapstep::placeholder{color:var(--dim2)}
+  .badge25{position:absolute;left:50%;top:10px;transform:translateX(-50%);display:none;font-family:var(--mono);font-size:11px;
+    color:#7fd4e6;background:rgba(20,20,24,.8);border:1px solid #2e4a52;border-radius:5px;padding:5px 11px;pointer-events:none;letter-spacing:.5px;z-index:5}
+  .stagewrap.prev25 .badge25{display:block}
+  .stagewrap.prev25 .ruler-z,.stagewrap.prev25 .ruler-x,.stagewrap.prev25 .ruler-corner,.stagewrap.prev25 .axislegend,.stagewrap.prev25 .readout{opacity:.25}
+  .stagewrap.prev25 svg.canvas{left:0;width:100%}
   .floatlabel{position:absolute;font-family:var(--mono);font-size:10.5px;color:#1a1206;background:var(--amber);
     padding:2px 6px;border-radius:3px;pointer-events:none;transform:translate(10px,-26px);white-space:nowrap;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,.4)}
 
@@ -177,6 +186,13 @@
   .grip .mk{position:absolute;width:12px;height:12px;margin:-6px 0 0 -6px;border:2px solid var(--amber);border-radius:50%;
     box-shadow:0 0 0 1px rgba(0,0,0,.6);pointer-events:none}
   .grip .mk::after{content:"";position:absolute;inset:3px;border-radius:50%;background:var(--amber)}
+  .grip .mk.tip{border-color:#7fd4e6}
+  .grip .mk.tip::after{background:#7fd4e6}
+  .seg{display:flex;gap:2px;background:var(--panel2);border:1px solid var(--border);border-radius:5px;padding:2px;margin-bottom:9px}
+  .segbtn{flex:1;height:24px;border:none;background:transparent;color:var(--dim);font-size:11px;border-radius:3px;cursor:pointer;font-family:var(--mono)}
+  .segbtn.on{background:#2a2a33}
+  .segbtn.grip.on{color:var(--amber)}
+  .segbtn.tip.on{color:#7fd4e6}
   .grip .hint{font-size:10.5px;color:var(--dim2);text-align:center;margin-top:6px}
   .toolbtn{display:flex;gap:6px;margin-bottom:8px}
   .btn.danger{color:#e88;border-color:#43282b}
@@ -224,7 +240,10 @@
       <button class="tog on" data-tg="labels"><span class="dot"></span>Labels</button>
       <button class="tog on" data-tg="sprite"><span class="dot"></span>Sprite</button>
       <button class="tog on" data-tg="bones"><span class="dot"></span>Bones</button>
+      <button class="tog on" data-tg="snap" title="Snap drags to grid + bone joints (S · hold Alt to disable)"><span class="dot"></span>Snap</button>
+      <button class="tog" data-tg="preview25" title="2.5D verification view (~35° camera) — shows weapon depth"><span class="dot"></span>2.5D</button>
     </div>
+    <input class="snapstep" id="snapStep" placeholder="auto" title="Grid snap increment in bone units (blank = auto gridStep)">
     <div class="tdiv"></div>
     <button class="btn" id="btnSaveProj" title="Download the whole project (characters + library)">Save project</button>
     <button class="btn ghost" id="btnLoadProj">Load project</button>
@@ -269,6 +288,7 @@
       <div class="readout" id="readout"><span><span class="k">x</span> <b id="rx">—</b></span><span><span class="k">z</span> <b id="rz">—</b></span></div>
       <div class="scalebar" id="scalebar"><div class="bwrap"><span id="sbLabel">0.1</span><span class="bar" id="sbBar" style="width:40px"></span></div><div class="z" id="sbZoom">—</div></div>
       <div class="floatlabel" id="floatlabel" style="display:none"></div>
+      <div class="badge25" id="badge25">2.5D PREVIEW · verification (~35°)</div>
     </div>
     </div>
 
@@ -358,14 +378,47 @@
     weapons:[],
     sel:{kind:null,id:null},
     view:{ x:-0.5, y:-0.7, w:1.0, h:1.4 },
-    show:{ grid:true, labels:true, sprite:true, bones:true }
+    show:{ grid:true, labels:true, sprite:true, bones:true, snap:true, preview25:false }
   };
   var WID=0;
+
+  // ---------- v3 precision state ----------
+  var SNAP = { stepManual:null, target:null };        // stepManual=null → auto gridStep; target={x,z,kind} drawn as a ring
+  var ANCHOR_MODE = "grip";                            // which anchor the thumbnail picker sets ('grip' | 'tip')
+  var PREV_DEG = 35;                                   // 2.5D camera elevation
+  var PREV_COS = Math.cos(PREV_DEG*Math.PI/180);
+  var PREV_TAN = Math.tan(PREV_DEG*Math.PI/180);
+  function snapStep(){ return (SNAP.stepManual && SNAP.stepManual>0) ? SNAP.stepManual : gridStep(S.view); }
+  // pre-group-scale svg-y; in 2.5D, depth (y) shifts vertically so it reads as oblique
+  function projY(z, y){ return S.show.preview25 ? (-z - (y||0)*PREV_TAN) : (-z); }
+  // snap a bone-space point to grid increment, or to a nearby bone head/tail (≤ ~10px)
+  function snapPoint(x, z, excludeBone){
+    var m=svg.getScreenCTM();
+    var pxPerUnit = m ? Math.abs(m.a) : 600;
+    var thr = 10 / pxPerUnit;                          // ~10px screen threshold in bone units
+    var best=null, bd=thr;
+    if(S.skeleton){
+      S.skeleton.bones.forEach(function(b){
+        if(b.name!==excludeBone){
+          var dh=Math.hypot(b.head[0]-x, b.head[2]-z); if(dh<bd){ bd=dh; best={x:b.head[0],z:b.head[2],kind:"joint",bone:b.name,which:"head"}; }
+        }
+        var dt=Math.hypot(b.tail[0]-x, b.tail[2]-z); if(dt<bd){ bd=dt; best={x:b.tail[0],z:b.tail[2],kind:"joint",bone:b.name,which:"tail"}; }
+      });
+    }
+    if(best) return best;
+    var s=snapStep();
+    return { x:Math.round(x/s)*s, z:Math.round(z/s)*s, kind:"grid" };
+  }
 
   // ---------- v2 project model ----------
   // P holds the whole project; S mirrors the ACTIVE character (skeleton/sprite/weapons/view are
   // shared object refs with the active character, so all existing v1 render/edit code is unchanged).
-  var P = { characters:[], library:[], activeChar:null, tray:[], traySel:null, libSel:null };
+  var P = { characters:[], library:[], presets:[], activeChar:null, tray:[], traySel:null, libSel:null };
+  var BUILTIN_PRESETS = [
+    { name:"two-hand polearm low", boneRole:"hand", offset:[0.018,-0.01], depthY:0.0, rotationDeg:0, scale:1.2, gripAnchor:[0.5,0.6], tipAnchor:[0.5,0.04] },
+    { name:"one-hand sword guard", boneRole:"hand", offset:[0.0,0.0], depthY:0.0, rotationDeg:-18, scale:0.9, gripAnchor:[0.5,0.72], tipAnchor:[0.5,0.05] }
+  ];
+  P.presets = BUILTIN_PRESETS.map(function(p){ return JSON.parse(JSON.stringify(p)); });
   var CID=0, LID=0;
   function charById(id){ return P.characters.find(function(c){return c.id===id;}); }
   function AC(){ return charById(P.activeChar); }
@@ -401,14 +454,37 @@
   function activate(id){ if(id===P.activeChar)return; commitActive(); P.activeChar=id; var c=charById(id); if(c) loadInto(c); else clearActive(); renderAll(); }
 
   // library props + placements
-  function addLibProp(name,src,aspect,grip){
+  function addLibProp(name,src,aspect,grip,tip){
     var id="lib"+(++LID);
-    var p={ id:id, name:name||("prop "+id), src:src, aspect:aspect, gripAnchor:(grip||[0.5,0.6]).slice() };
+    var p={ id:id, name:name||("prop "+id), src:src, aspect:aspect, gripAnchor:(grip||[0.5,0.6]).slice(), tipAnchor:(tip||[0.5,0.04]).slice() };
     P.library.push(p); return p;
   }
   function makeWeapon(prop, bone, offset){
     var id="w"+(++WID);
-    return { id:id, libId:prop.id, asset:prop.name, src:prop.src, aspect:prop.aspect, grip:prop.gripAnchor, bone:bone, offset:(offset||[0,0]).slice(), rotationDeg:0, scale:1.2 };
+    return { id:id, libId:prop.id, asset:prop.name, src:prop.src, aspect:prop.aspect, grip:prop.gripAnchor, tip:prop.tipAnchor, bone:bone, offset:(offset||[0,0]).slice(), depthY:0, rotationDeg:0, scale:1.2 };
+  }
+  // weapon presets — a hold saved once, reusable across the roster (character-independent)
+  function roleOf(boneName){ return /hand|wrist|bone_9$/.test(boneName||"") ? "hand" : (boneName||"hand"); }
+  function resolveRole(role, sk){ if(!sk) return "bone_0"; if(role==="hand") return handBoneOf(sk); var hit=sk.bones.find(function(b){return b.name===role;}); return hit?hit.name:handBoneOf(sk); }
+  function applyPreset(w, preset){
+    if(!w||!preset) return;
+    w.offset=[preset.offset[0],preset.offset[1]];
+    w.depthY=preset.depthY||0;
+    w.rotationDeg=preset.rotationDeg||0;
+    w.scale=preset.scale||1.2;
+    if(S.skeleton) w.bone=resolveRole(preset.boneRole, S.skeleton);
+    var prop=libById(w.libId);
+    if(prop){
+      if(preset.gripAnchor){ prop.gripAnchor[0]=preset.gripAnchor[0]; prop.gripAnchor[1]=preset.gripAnchor[1]; }
+      if(preset.tipAnchor){ prop.tipAnchor[0]=preset.tipAnchor[0]; prop.tipAnchor[1]=preset.tipAnchor[1]; }
+    }
+  }
+  function presetFromWeapon(w, name){
+    var prop=libById(w.libId);
+    return { name:name, boneRole:roleOf(w.bone),
+      offset:[round(w.offset[0]),round(w.offset[1])], depthY:round(w.depthY||0),
+      rotationDeg:round(w.rotationDeg), scale:round(w.scale),
+      gripAnchor:(prop?prop.gripAnchor:w.grip).slice(), tipAnchor:(prop?prop.tipAnchor:(w.tip||[0.5,0.04])).slice() };
   }
   function handBoneOf(sk){ if(!sk)return "bone_0"; var h=sk.bones.find(function(b){return /hand|wrist|bone_9$/.test(b.name);}); return h?h.name:(sk.bones[0]&&sk.bones[0].name)||"bone_0"; }
   function placePropOn(c, prop, bone, offset){
@@ -516,6 +592,7 @@
 
   // tracking crosshair following the cursor across the plot
   function updateCrosshair(clientX,clientY){
+    if(S.show.preview25){ hideCrosshair(); return; }
     var rc=stage.getBoundingClientRect();
     var px=clientX-rc.left, py=clientY-rc.top;
     var plotH=rc.height-GUT_B;
@@ -536,7 +613,7 @@
   function skelH(){ return S.skeleton ? (S.skeleton.bbox.z[1]-S.skeleton.bbox.z[0]) : 1; }
   function attachPoint(w){
     var b=boneByName(w.bone); if(!b) return null;
-    return [ round(b.head[0]+w.offset[0]), round(b.head[1]), round(b.head[2]+w.offset[1]) ];
+    return [ round(b.head[0]+w.offset[0]), round(b.head[1]+(w.depthY||0)), round(b.head[2]+w.offset[1]) ];
   }
 
   function select(kind,id){ S.sel={kind:kind,id:id}; renderCanvas(); renderInspector(); }
@@ -552,6 +629,7 @@
     var r = v.w*0.009;                  // joint radius (≈constant on-screen)
     var sk=skelH();
     var out=[];
+    if(S.show.preview25) out.push('<g transform="scale(1,'+PREV_COS+')">');
 
     // ---- grid (three tiers: minor / major / axis) ----
     if(S.show.grid){
@@ -598,7 +676,7 @@
     S.weapons.forEach(function(w){
       var b=boneByName(w.bone); if(!b) return;
       var ax=b.head[0]+w.offset[0], az=b.head[2]+w.offset[1];
-      var gx=toSvgX(ax), gy=toSvgY(az);
+      var gx=ax, gy=projY(az, b.head[1]+(w.depthY||0));
       var h=w.scale*sk, wd=h*w.aspect;
       var ix=gx-w.grip[0]*wd, iy=gy-w.grip[1]*h;
       var sel=(S.sel.kind==="weapon" && S.sel.id===w.id);
@@ -613,8 +691,11 @@
         // scale handle (bottom-right corner of bbox)
         out.push('<rect x="'+(ix+wd-r*0.8)+'" y="'+(iy+h-r*0.8)+'" width="'+(r*1.6)+'" height="'+(r*1.6)+'" fill="#16161a" stroke="#f0a830" stroke-width="1.4" vector-effect="non-scaling-stroke" data-scl="'+w.id+'" style="cursor:nwse-resize"/>');
       }
-      // grip-anchor marker
+      // grip-anchor marker (amber) + tip-anchor marker (cyan, the striking end)
       out.push('<circle cx="'+gx+'" cy="'+gy+'" r="'+(r*0.62)+'" fill="#f0a830" stroke="#16161a" stroke-width="1.2" vector-effect="non-scaling-stroke" style="pointer-events:none"/>');
+      var tipv=w.tip||[0.5,0.04]; var tpx=ix+tipv[0]*wd, tpy=iy+tipv[1]*h;
+      out.push('<circle cx="'+tpx+'" cy="'+tpy+'" r="'+(r*0.6)+'" fill="none" stroke="#7fd4e6" stroke-width="1.6" vector-effect="non-scaling-stroke" style="pointer-events:none"/>');
+      out.push('<circle cx="'+tpx+'" cy="'+tpy+'" r="'+(r*0.17)+'" fill="#7fd4e6" vector-effect="non-scaling-stroke" style="pointer-events:none"/>');
       out.push('</g>');
     });
 
@@ -622,8 +703,8 @@
     if(S.show.bones && S.skeleton){
       out.push('<g>');
       S.skeleton.bones.forEach(function(b){
-        var hx=toSvgX(b.head[0]), hy=toSvgY(b.head[2]);
-        var tx=toSvgX(b.tail[0]), ty=toSvgY(b.tail[2]);
+        var hx=toSvgX(b.head[0]), hy=projY(b.head[2], b.head[1]);
+        var tx=toSvgX(b.tail[0]), ty=projY(b.tail[2], b.tail[1]);
         if(b.deform){
           out.push('<line x1="'+hx+'" y1="'+hy+'" x2="'+tx+'" y2="'+ty+'" stroke="#7fd4e6" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>');
         }else{
@@ -631,7 +712,7 @@
         }
       });
       S.skeleton.bones.forEach(function(b){
-        var hx=toSvgX(b.head[0]), hy=toSvgY(b.head[2]);
+        var hx=toSvgX(b.head[0]), hy=projY(b.head[2], b.head[1]);
         var sel=(S.sel.kind==="bone" && S.sel.id===b.name);
         if(sel){
           out.push('<circle cx="'+hx+'" cy="'+hy+'" r="'+(r*2.1)+'" fill="none" stroke="#f0a830" stroke-width="1.2" opacity="0.5" vector-effect="non-scaling-stroke" style="pointer-events:none"/>');
@@ -641,6 +722,15 @@
       out.push('</g>');
     }
 
+    // ---- snap indicator ----
+    if(SNAP.target){
+      var sxn=SNAP.target.x, syn=projY(SNAP.target.z, 0);
+      out.push('<circle cx="'+sxn+'" cy="'+syn+'" r="'+(r*2.0)+'" fill="none" stroke="#f0a830" stroke-width="1.6" vector-effect="non-scaling-stroke" style="pointer-events:none"/>');
+      out.push('<circle cx="'+sxn+'" cy="'+syn+'" r="'+(r*0.5)+'" fill="#f0a830" vector-effect="non-scaling-stroke" style="pointer-events:none"/>');
+    }
+
+    if(S.show.preview25) out.push('</g>');
+
     svg.innerHTML = out.join("");
     renderRulers();
 
@@ -648,6 +738,7 @@
     svg.querySelectorAll("[data-bone]").forEach(function(el){
       el.addEventListener("pointerdown", function(e){
         e.stopPropagation();
+        if(S.show.preview25) return;
         var name=el.getAttribute("data-bone"); var b=boneByName(name);
         select("bone",name);
         dragState={kind:"bone",id:name,start:cursorBone(e.clientX,e.clientY),val:[b.head[0],b.head[2]]};
@@ -656,6 +747,7 @@
     svg.querySelectorAll("[data-wid]").forEach(function(el){
       el.addEventListener("pointerdown", function(e){
         e.stopPropagation();
+        if(S.show.preview25) return;
         var id=el.getAttribute("data-wid"); var w=S.weapons.find(function(x){return x.id===id;});
         select("weapon",id);
         dragState={kind:"weapon",id:id,start:cursorBone(e.clientX,e.clientY),val:[w.offset[0],w.offset[1]]};
@@ -664,12 +756,14 @@
     svg.querySelectorAll("[data-rot]").forEach(function(el){
       el.addEventListener("pointerdown", function(e){
         e.stopPropagation();
+        if(S.show.preview25) return;
         dragState={kind:"rotate",id:el.getAttribute("data-rot")};
       });
     });
     svg.querySelectorAll("[data-scl]").forEach(function(el){
       el.addEventListener("pointerdown", function(e){
         e.stopPropagation();
+        if(S.show.preview25) return;
         var id=el.getAttribute("data-scl"); var w=S.weapons.find(function(x){return x.id===id;});
         var c=cursorBone(e.clientX,e.clientY); var b=boneByName(w.bone);
         var gx=b.head[0]+w.offset[0], gz=b.head[2]+w.offset[1];
@@ -769,7 +863,7 @@
     h+='<div class="row"><label>bone</label><select class="fld" id="wp-bone">'+
        bones.map(function(bb){ return '<option value="'+esc(bb.name)+'"'+(bb.name===w.bone?' selected':'')+'>'+esc(bb.name)+(bb.deform?'':' · socket')+'</option>'; }).join("")+
        '</select></div>';
-    h+='<div class="attach"><div class="lbl"><span class="d"></span>resolved attach point&nbsp;·&nbsp;bone.head + offset</div><div class="val" id="wp-attach">'+
+    h+='<div class="attach"><div class="lbl"><span class="d"></span>resolved attach point&nbsp;·&nbsp;head + offset + depthY</div><div class="val" id="wp-attach">'+
        (ap?('('+f4s(ap[0])+',  '+f4s(ap[1])+',  '+f4s(ap[2])+')'):'—')+'</div></div>';
     h+='</div>';
 
@@ -781,10 +875,30 @@
     h+='<div class="sec"><div class="sec-h">Transform</div>';
     h+='<div class="row"><label>rotation</label><input type="range" id="wp-rot" min="-180" max="180" step="0.5" value="'+w.rotationDeg+'"><input class="fld num" id="wp-rotn" value="'+w.rotationDeg.toFixed(1)+'"></div>';
     h+='<div class="row"><label>scale</label><input type="range" id="wp-scl" min="0.1" max="3" step="0.01" value="'+w.scale+'"><input class="fld num" id="wp-scln" value="'+w.scale.toFixed(2)+'"></div>';
+    h+='<div class="row"><label title="toward (\u2212Y, front) / away (+Y) from the camera">depth (y)</label><input type="range" id="wp-depth" min="-0.15" max="0.15" step="0.005" value="'+(w.depthY||0)+'"><input class="fld num" id="wp-depthn" value="'+(w.depthY||0).toFixed(3)+'"></div>';
     h+='</div>';
 
-    h+='<div class="sec"><div class="sec-h">Grip anchor <span style="color:var(--dim2)" id="wp-gripval">'+w.grip[0].toFixed(2)+', '+w.grip[1].toFixed(2)+'</span></div>';
-    h+='<div class="grip"><div class="thumb" id="wp-thumb"><img src="'+esc(w.src)+'" id="wp-thumbimg" draggable="false"><div class="mk" id="wp-mk" style="left:'+(w.grip[0]*100)+'%;top:'+(w.grip[1]*100)+'%"></div></div><div class="hint">click to set the grip · shared by every placement of this prop</div></div>';
+    h+='<div class="sec"><div class="sec-h">Anchors <span style="color:var(--dim2)">grip · tip</span></div>';
+    h+='<div class="seg" id="wp-anchseg"><button class="segbtn grip'+(ANCHOR_MODE==="grip"?" on":"")+'" data-am="grip">\u25cf Grip</button><button class="segbtn tip'+(ANCHOR_MODE==="tip"?" on":"")+'" data-am="tip">\u25b2 Tip</button></div>';
+    var tipv=w.tip||[0.5,0.04];
+    h+='<div class="grip"><div class="thumb" id="wp-thumb"><img src="'+esc(w.src)+'" id="wp-thumbimg" draggable="false">'
+      +'<div class="mk grip" id="wp-mk" style="left:'+(w.grip[0]*100)+'%;top:'+(w.grip[1]*100)+'%"></div>'
+      +'<div class="mk tip" id="wp-tip-mk" style="left:'+(tipv[0]*100)+'%;top:'+(tipv[1]*100)+'%"></div></div>'
+      +'<div class="hint">click the image to set the <b id="wp-ahint">'+ANCHOR_MODE+'</b> · shared per prop</div></div>';
+    h+='<div class="kv"><span class="k">grip [u,v]</span><span class="v" id="wp-gripval">'+w.grip[0].toFixed(2)+', '+w.grip[1].toFixed(2)+'</span></div>';
+    h+='<div class="kv"><span class="k" style="color:#7fd4e6">tip [u,v]</span><span class="v" id="wp-tipval" style="color:#7fd4e6">'+tipv[0].toFixed(2)+', '+tipv[1].toFixed(2)+'</span></div>';
+    h+='</div>';
+
+    h+='<div class="sec"><div class="sec-h">Presets</div>';
+    h+='<div class="toolbtn"><button class="btn ghost" id="wp-preset-save" style="flex:1">Save current hold as preset…</button></div>';
+    if(P.presets.length){
+      P.presets.forEach(function(ps,i){
+        h+='<div class="row" style="gap:5px;margin-bottom:5px"><span style="flex:1;min-width:0;font-family:var(--mono);font-size:11px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+esc(ps.name)+'">'+esc(ps.name)+'</span>'
+          +'<button class="btn ghost" data-papply="'+i+'" style="height:22px;padding:0 8px;font-size:10.5px">apply</button>'
+          +'<button class="icbtn" data-pren="'+i+'" title="rename" style="width:20px;height:20px;font-size:10px">\u270e</button>'
+          +'<button class="icbtn" data-pdel="'+i+'" title="delete" style="width:20px;height:20px;font-size:10px">\u2715</button></div>';
+      });
+    } else { h+='<div class="empty">No presets yet. Tune a hold, then <b>Save current hold</b> — reuse it across the roster.</div>'; }
     h+='</div>';
 
     h+='<div class="sec"><div class="toolbtn"><button class="btn ghost" id="wp-deselect" style="flex:1">Deselect</button><button class="btn danger" id="wp-remove" style="flex:1">Remove weapon</button></div></div>';
@@ -859,17 +973,37 @@
     if(scl) scl.addEventListener("input",function(){ w.scale=parseFloat(scl.value); scln.value=w.scale.toFixed(2); renderCanvas(); });
     if(scln) scln.addEventListener("input",function(){ var n=parseFloat(scln.value); if(!isNaN(n)&&n>0){ w.scale=n; scl.value=n; renderCanvas(); } });
 
+    var dep=document.getElementById("wp-depth"), depn=document.getElementById("wp-depthn");
+    if(dep) dep.addEventListener("input",function(){ w.depthY=parseFloat(dep.value); depn.value=w.depthY.toFixed(3); renderCanvas(); refreshAttach(w); });
+    if(depn) depn.addEventListener("input",function(){ var n=parseFloat(depn.value); if(!isNaN(n)){ w.depthY=n; dep.value=n; renderCanvas(); refreshAttach(w); } });
+
+    var seg=document.getElementById("wp-anchseg");
+    if(seg) seg.querySelectorAll("[data-am]").forEach(function(bb){ bb.addEventListener("click",function(){
+      ANCHOR_MODE=bb.getAttribute("data-am");
+      seg.querySelectorAll("[data-am]").forEach(function(x){ x.classList.toggle("on", x.getAttribute("data-am")===ANCHOR_MODE); });
+      var ah=document.getElementById("wp-ahint"); if(ah) ah.textContent=ANCHOR_MODE;
+    }); });
+
     var thumb=document.getElementById("wp-thumb");
     if(thumb){
       thumb.addEventListener("click",function(e){
         var rc=thumb.getBoundingClientRect();
         var u=clamp((e.clientX-rc.left)/rc.width,0,1);
         var vv=clamp((e.clientY-rc.top)/rc.height,0,1);
-        var prop=libById(w.libId); var arr = prop?prop.gripAnchor:w.grip;
-        arr[0]=round(u); arr[1]=round(vv);
-        if(w.grip!==arr){ w.grip[0]=round(u); w.grip[1]=round(vv); }
-        var mk=document.getElementById("wp-mk"); mk.style.left=(u*100)+"%"; mk.style.top=(vv*100)+"%";
-        var gv=document.getElementById("wp-gripval"); if(gv) gv.textContent=arr[0].toFixed(2)+", "+arr[1].toFixed(2);
+        var prop=libById(w.libId);
+        if(ANCHOR_MODE==="tip"){
+          var tarr = prop?prop.tipAnchor:(w.tip||(w.tip=[0.5,0.04]));
+          tarr[0]=round(u); tarr[1]=round(vv);
+          if(w.tip!==tarr){ w.tip[0]=round(u); w.tip[1]=round(vv); }
+          var tmk=document.getElementById("wp-tip-mk"); tmk.style.left=(u*100)+"%"; tmk.style.top=(vv*100)+"%";
+          var tv=document.getElementById("wp-tipval"); if(tv) tv.textContent=tarr[0].toFixed(2)+", "+tarr[1].toFixed(2);
+        } else {
+          var arr = prop?prop.gripAnchor:w.grip;
+          arr[0]=round(u); arr[1]=round(vv);
+          if(w.grip!==arr){ w.grip[0]=round(u); w.grip[1]=round(vv); }
+          var mk=document.getElementById("wp-mk"); mk.style.left=(u*100)+"%"; mk.style.top=(vv*100)+"%";
+          var gv=document.getElementById("wp-gripval"); if(gv) gv.textContent=arr[0].toFixed(2)+", "+arr[1].toFixed(2);
+        }
         renderCanvas(); renderLibrary(); autosave();
       });
     }
@@ -877,6 +1011,12 @@
     if(ds) ds.addEventListener("click",function(){ select(null,null); });
     var rm=document.getElementById("wp-remove");
     if(rm) rm.addEventListener("click",function(){ removeWeapon(w.id); });
+
+    var psave=document.getElementById("wp-preset-save");
+    if(psave) psave.addEventListener("click",function(){ var nm=window.prompt("Preset name:", w.asset+" hold"); if(nm&&nm.trim()){ P.presets.push(presetFromWeapon(w, nm.trim())); renderInspector(); autosave(); toast("Saved preset"); } });
+    insp.querySelectorAll("[data-papply]").forEach(function(b){ b.addEventListener("click",function(){ applyPreset(w, P.presets[+b.getAttribute("data-papply")]); renderCanvas(); renderInspector(); renderLibrary(); autosave(); toast("Applied preset"); }); });
+    insp.querySelectorAll("[data-pren]").forEach(function(b){ b.addEventListener("click",function(){ var i=+b.getAttribute("data-pren"); var nm=window.prompt("Rename preset:", P.presets[i].name); if(nm&&nm.trim()){ P.presets[i].name=nm.trim(); renderInspector(); autosave(); } }); });
+    insp.querySelectorAll("[data-pdel]").forEach(function(b){ b.addEventListener("click",function(){ var i=+b.getAttribute("data-pdel"); if(window.confirm("Delete preset \""+P.presets[i].name+"\"?")){ P.presets.splice(i,1); renderInspector(); autosave(); } }); });
   }
   function refreshAttach(w){
     var el=document.getElementById("wp-attach"); if(!el) return;
@@ -950,15 +1090,33 @@
       var dx=cb[0]-d.start[0], dz=cb[1]-d.start[1];
       var bone=boneByName(d.id); if(!bone) return;
       var nx=d.val[0]+dx, nz=d.val[1]+dz;
-      bone.head=[nx,bone.head[1],nz];
-      if(bone.parent){ var p=boneByName(bone.parent); if(p) p.tail=[nx,bone.head[1],nz]; }
-      showFloat(e, f4s(nx)+", "+f4s(nz));
+      if(S.show.snap && !e.altKey){ var sp=snapPoint(nx,nz,bone.name); nx=sp.x; nz=sp.z; SNAP.target={x:sp.x,z:sp.z,kind:sp.kind}; }
+      else SNAP.target=null;
+      bone.head=[round(nx),bone.head[1],round(nz)];
+      if(bone.parent){ var p=boneByName(bone.parent); if(p) p.tail=[round(nx),bone.head[1],round(nz)]; }
+      showFloat(e, f4s(nx)+", "+f4s(nz)+(SNAP.target&&SNAP.target.kind==="joint"?" \u29bf":""));
       scheduleCanvas(); syncBoneFields(bone);
     }else if(d.kind==="weapon"){
       var dxw=cb[0]-d.start[0], dzw=cb[1]-d.start[1];
       var w=S.weapons.find(function(x){return x.id===d.id;}); if(!w) return;
-      w.offset=[round(d.val[0]+dxw), round(d.val[1]+dzw)];
-      showFloat(e, "offset "+f4s(w.offset[0])+", "+f4s(w.offset[1]));
+      var b0=boneByName(w.bone); if(!b0) return;
+      var gxw=b0.head[0]+d.val[0]+dxw, gzw=b0.head[2]+d.val[1]+dzw;   // grip world pos
+      if(S.show.snap && !e.altKey){
+        var spw=snapPoint(gxw, gzw, null);
+        if(spw.kind==="joint"){
+          var nb=boneByName(spw.bone); w.bone=spw.bone;
+          if(spw.which==="tail"){ w.offset=[round(nb.tail[0]-nb.head[0]), round(nb.tail[2]-nb.head[2])]; SNAP.target={x:nb.tail[0],z:nb.tail[2],kind:"joint"}; }
+          else { w.offset=[0,0]; SNAP.target={x:nb.head[0],z:nb.head[2],kind:"joint"}; }
+          showFloat(e, "\u29bf "+w.bone);
+        } else {
+          w.offset=[round(spw.x-b0.head[0]), round(spw.z-b0.head[2])];
+          SNAP.target={x:spw.x,z:spw.z,kind:"grid"};
+          showFloat(e, "offset "+f4s(w.offset[0])+", "+f4s(w.offset[1]));
+        }
+      } else {
+        w.offset=[round(d.val[0]+dxw), round(d.val[1]+dzw)]; SNAP.target=null;
+        showFloat(e, "offset "+f4s(w.offset[0])+", "+f4s(w.offset[1]));
+      }
       scheduleCanvas(); syncWeaponOffset(w);
     }else if(d.kind==="rotate"){
       var wr=S.weapons.find(function(x){return x.id===d.id;}); if(!wr) return;
@@ -979,8 +1137,10 @@
     }
   });
   window.addEventListener("pointerup", function(){
-    if(dragState && (dragState.kind==="bone")) renderInspector();
+    if(dragState && (dragState.kind==="bone"||dragState.kind==="weapon")) renderInspector();
+    var hadSnap=!!SNAP.target; SNAP.target=null;
     dragState=null; svg.classList.remove("panning"); hideFloat();
+    if(hadSnap) renderCanvas();
   });
 
   function syncBoneFields(b){
@@ -1050,10 +1210,26 @@
   function toast(msg){ toastEl.textContent=msg; toastEl.classList.add("show"); clearTimeout(toastT); toastT=setTimeout(function(){toastEl.classList.remove("show");},1800); }
 
   // ---------- toggles ----------
+  function applyPreview25(){
+    var sw=document.getElementById("stagewrap");
+    sw.classList.toggle("prev25", !!S.show.preview25);
+    if(S.show.preview25) hideCrosshair();
+    requestAnimationFrame(renderCanvas);
+  }
   document.getElementById("toggles").addEventListener("click",function(e){
     var t=e.target.closest("[data-tg]"); if(!t) return;
     var k=t.getAttribute("data-tg"); S.show[k]=!S.show[k];
-    t.classList.toggle("on",S.show[k]); renderCanvas();
+    t.classList.toggle("on",S.show[k]);
+    if(k==="preview25") applyPreview25(); else renderCanvas();
+  });
+  (function(){
+    var ss=document.getElementById("snapStep");
+    if(ss) ss.addEventListener("input",function(){ var n=parseFloat(ss.value); SNAP.stepManual=(!isNaN(n)&&n>0)?n:null; });
+  })();
+  window.addEventListener("keydown",function(e){
+    if(e.ctrlKey||e.metaKey||e.altKey) return;
+    var tag=(e.target.tagName||"").toLowerCase(); if(tag==="input"||tag==="textarea") return;
+    if(e.key==="s"||e.key==="S"){ var b=document.querySelector('[data-tg="snap"]'); if(b) b.click(); }
   });
 
   // ---------- toolbar buttons ----------
@@ -1295,9 +1471,10 @@
         var prop=libById(w.libId);
         var asset=prop?prop.name:(w.asset||"prop");
         var grip=prop?prop.gripAnchor:(w.grip||[0.5,0.6]);
+        var tip=prop?prop.tipAnchor:(w.tip||[0.5,0.04]);
         var b=c.skeleton&&c.skeleton.bones.find(function(bb){return bb.name===w.bone;});
-        var ap=b?[ round(b.head[0]+w.offset[0]), round(b.head[1]), round(b.head[2]+w.offset[1]) ]:null;
-        return { asset:asset, bone:w.bone, offset:[round(w.offset[0]),round(w.offset[1])], gripAnchor:[round(grip[0]),round(grip[1])], rotationDeg:round(w.rotationDeg), scale:round(w.scale), attachPoint:ap };
+        var ap=b?[ round(b.head[0]+w.offset[0]), round(b.head[1]+(w.depthY||0)), round(b.head[2]+w.offset[1]) ]:null;
+        return { asset:asset, bone:w.bone, offset:[round(w.offset[0]),round(w.offset[1])], depthY:round(w.depthY||0), gripAnchor:[round(grip[0]),round(grip[1])], tipAnchor:[round(tip[0]),round(tip[1])], rotationDeg:round(w.rotationDeg), scale:round(w.scale), attachPoint:ap };
       })
     };
   }
@@ -1312,14 +1489,15 @@
   // ---- project save / load ----
   function projectObject(){
     return {
-      format:"sprite-motion.project", version:2, activeChar:P.activeChar,
-      library:P.library.map(function(p){ return { id:p.id, name:p.name, src:p.src, aspect:round(p.aspect), gripAnchor:[round(p.gripAnchor[0]),round(p.gripAnchor[1])] }; }),
+      format:"sprite-motion.project", version:3, activeChar:P.activeChar,
+      presets:P.presets.map(function(ps){ return { name:ps.name, boneRole:ps.boneRole, offset:[round(ps.offset[0]),round(ps.offset[1])], depthY:round(ps.depthY||0), rotationDeg:round(ps.rotationDeg), scale:round(ps.scale), gripAnchor:[round(ps.gripAnchor[0]),round(ps.gripAnchor[1])], tipAnchor:[round(ps.tipAnchor[0]),round(ps.tipAnchor[1])] }; }),
+      library:P.library.map(function(p){ return { id:p.id, name:p.name, src:p.src, aspect:round(p.aspect), gripAnchor:[round(p.gripAnchor[0]),round(p.gripAnchor[1])], tipAnchor:[round(p.tipAnchor[0]),round(p.tipAnchor[1])] }; }),
       characters:P.characters.map(function(c){
         return {
           id:c.id, name:c.name,
           skeleton:c.skeleton,
           sprite:(c.sprite&&c.sprite.src)?{ src:c.sprite.src, aspect:round(c.sprite.aspect), cx:round(c.sprite.cx), cz:round(c.sprite.cz), height:round(c.sprite.height), opacity:round(c.sprite.opacity), visible:c.sprite.visible }:null,
-          weapons:(c.weapons||[]).map(function(w){ return { id:w.id, libId:w.libId, bone:w.bone, offset:[round(w.offset[0]),round(w.offset[1])], rotationDeg:round(w.rotationDeg), scale:round(w.scale) }; }),
+          weapons:(c.weapons||[]).map(function(w){ return { id:w.id, libId:w.libId, bone:w.bone, offset:[round(w.offset[0]),round(w.offset[1])], depthY:round(w.depthY||0), rotationDeg:round(w.rotationDeg), scale:round(w.scale) }; }),
           view:c.view
         };
       })
@@ -1334,17 +1512,18 @@
   function maxId(arr,pfx){ var m=0; arr.forEach(function(o){ var n=parseInt(String(o.id).replace(pfx,""),10); if(!isNaN(n)&&n>m)m=n; }); return m; }
   function loadProject(obj){
     if(!obj || obj.format!=="sprite-motion.project") throw new Error("not a sprite-motion project file");
-    P.library=(obj.library||[]).map(function(p){ return { id:p.id, name:p.name, src:p.src, aspect:p.aspect||1, gripAnchor:(p.gripAnchor||[0.5,0.6]).slice() }; });
+    P.library=(obj.library||[]).map(function(p){ return { id:p.id, name:p.name, src:p.src, aspect:p.aspect||1, gripAnchor:(p.gripAnchor||[0.5,0.6]).slice(), tipAnchor:(p.tipAnchor||[0.5,0.04]).slice() }; });
     P.characters=(obj.characters||[]).map(function(c){
       var sp = c.sprite ? { src:c.sprite.src, aspect:c.sprite.aspect||0.74, cx:c.sprite.cx||0, cz:c.sprite.cz||0, height:c.sprite.height||1.3, opacity:(c.sprite.opacity==null?0.8:c.sprite.opacity), visible:c.sprite.visible!==false } : blankSprite();
       var weapons=(c.weapons||[]).map(function(w){
         var prop=P.library.find(function(pp){return pp.id===w.libId;});
-        return { id:w.id, libId:w.libId, asset:prop?prop.name:"prop", src:prop?prop.src:null, aspect:prop?prop.aspect:1, grip:prop?prop.gripAnchor:[0.5,0.6], bone:w.bone, offset:(w.offset||[0,0]).slice(), rotationDeg:w.rotationDeg||0, scale:w.scale||1.2 };
+        return { id:w.id, libId:w.libId, asset:prop?prop.name:"prop", src:prop?prop.src:null, aspect:prop?prop.aspect:1, grip:prop?prop.gripAnchor:[0.5,0.6], tip:prop?prop.tipAnchor:[0.5,0.04], bone:w.bone, offset:(w.offset||[0,0]).slice(), depthY:w.depthY||0, rotationDeg:w.rotationDeg||0, scale:w.scale||1.2 };
       });
       var view=c.view||(c.skeleton?fitView({x:c.skeleton.bbox.x,z:c.skeleton.bbox.z}):defaultView());
       return { id:c.id, name:c.name||("character "+c.id), skeleton:c.skeleton||null, sprite:sp, weapons:weapons, view:view };
     });
     P.tray=[]; P.traySel=null; P.libSel=null;
+    P.presets=(obj.presets && obj.presets.length)?obj.presets.map(function(ps){ return JSON.parse(JSON.stringify(ps)); }):BUILTIN_PRESETS.map(function(p){ return JSON.parse(JSON.stringify(p)); });
     CID=maxId(P.characters,"c"); LID=maxId(P.library,"lib");
     WID=0; P.characters.forEach(function(c){ (c.weapons||[]).forEach(function(w){ var n=parseInt(String(w.id).replace("w",""),10); if(!isNaN(n)&&n>WID)WID=n; }); });
     P.activeChar=(obj.activeChar && charById(obj.activeChar))?obj.activeChar:(P.characters[0]?P.characters[0].id:null);
@@ -1452,12 +1631,20 @@
         {l:"Toggle labels ("+(tgOn("labels")?"on":"off")+")", run:function(){ tg("labels"); }},
         {l:"Toggle sprite ("+(tgOn("sprite")?"on":"off")+")", run:function(){ tg("sprite"); }},
         {l:"Toggle bones ("+(tgOn("bones")?"on":"off")+")", run:function(){ tg("bones"); }},
+        {l:"Toggle snapping ("+(tgOn("snap")?"on":"off")+")", run:function(){ tg("snap"); }},
+        {l:"Toggle 2.5D preview ("+(tgOn("preview25")?"on":"off")+")", run:function(){ tg("preview25"); }},
         {l:"Deselect", run:function(){ select(null,null); }}
       ];
       P.library.forEach(function(p){ c.push({l:"Place prop: "+p.name, g:"library", run:function(){ if(!AC()){ toast("Add a character first"); return; } placeProp(p); }}); });
       P.characters.forEach(function(ch){ if(ch.id!==P.activeChar) c.push({l:"Switch to: "+ch.name, g:"character", run:function(){ activate(ch.id); }}); });
       var sw=selWeapon();
       if(sw) c.push({l:"Remove selected weapon ("+sw.asset+")", run:function(){ removeWeapon(sw.id); }});
+      if(sw){
+        c.push({l:"Set depth / Y\u2026 (now "+(sw.depthY||0).toFixed(3)+")", g:"weapon", run:function(){ var v=window.prompt("Depth Y (\u22120.15 \u2026 0.15):", (sw.depthY||0)); if(v!==null){ var n=parseFloat(v); if(!isNaN(n)){ sw.depthY=clamp(n,-0.5,0.5); renderCanvas(); renderInspector(); autosave(); } } }});
+        c.push({l:"Set tip anchor (click the thumbnail)", g:"weapon", run:function(){ ANCHOR_MODE="tip"; renderInspector(); toast("Click the weapon thumbnail to set the tip"); }});
+        c.push({l:"Save weapon preset\u2026", g:"weapon", run:function(){ var nm=window.prompt("Preset name:", sw.asset+" hold"); if(nm&&nm.trim()){ P.presets.push(presetFromWeapon(sw,nm.trim())); renderInspector(); autosave(); toast("Saved preset"); } }});
+        P.presets.forEach(function(ps){ c.push({l:"Apply preset: "+ps.name, g:"preset", run:function(){ applyPreset(sw, ps); renderCanvas(); renderInspector(); renderLibrary(); autosave(); toast("Applied preset"); }}); });
+      }
       (S.weapons||[]).forEach(function(wp){ c.push({l:"Select weapon: "+wp.asset+"  ["+wp.bone+"]", g:"weapon", run:function(){ select("weapon",wp.id); }}); });
       if(S.skeleton) S.skeleton.bones.forEach(function(b){ c.push({l:"Select bone: "+b.name, g:"bone", run:function(){ select("bone",b.name); }}); });
       return c;
