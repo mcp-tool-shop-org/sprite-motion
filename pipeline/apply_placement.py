@@ -140,9 +140,9 @@ def _bone_depth(arm, name):
 def apply_pose(arm, pose):
     """Pose the armature from the editor's baked per-bone root-relative world transforms
     (poseForChar -> world.{p,q}, three.js Y-up). World transforms port across the three.js/Blender
-    bone-axis difference (Y-up -> Z-up via C); local delta-quats do NOT. Set each pose bone parent-first,
-    then bake the pose as the new REST (armature_apply) so the glTF export captures it and the weapon-grip
-    chain is built against the posed configuration (edit mode shows rest, so rest must already BE the pose)."""
+    bone-axis difference (Y-up -> Z-up via C); local delta-quats do NOT. Sets each pose bone parent-first;
+    rig_character then bakes the posed deformation into the mesh (apply Armature modifier) so the glTF
+    export carries the posed shape — armature_apply re-rests the skeleton but the bound mesh would NOT follow."""
     if not pose: return
     bd = pose.get("bones", {})
     posed = [n for n in bd if n in arm.pose.bones and bd[n].get("world")]
@@ -157,10 +157,28 @@ def apply_pose(arm, pose):
         M_root = mathutils.Matrix.Translation(V(wd["p"])) @ quat.to_matrix().to_4x4()
         arm.pose.bones[name].matrix = Minv @ (C @ M_root @ C.inverted())  # absolute posed transform, Blender space
         bpy.context.view_layer.update()
-    try: bpy.ops.pose.armature_apply()                                    # bake pose -> rest
-    except Exception as e: print(f"[pose] armature_apply warn: {e}", flush=True)
     bpy.ops.object.mode_set(mode='OBJECT')
-    print(f"[posed] {len(posed)} bone(s) baked to rest", flush=True)
+    print(f"[posed] {len(posed)} bone(s)", flush=True)
+
+def apply_role_pose(arm, pose, rolemap):
+    """Apply a Claude/MCP-authored canonical pose: per-role WORLD-axis delta rotations (Blender Z-up frame:
+    X=left/right, Y=depth/-Y-forward, Z=up), resolved to bones via the roleMap, applied FK parent-first, then
+    baked as rest. World-axis deltas port cleanly (no bone-axis issue) and are authorable WITHOUT the editor."""
+    rr = pose.get("roleRotations", {})
+    items = [(role, rolemap.get(role)) for role in rr if rolemap.get(role) in arm.pose.bones]
+    if not items: return
+    items.sort(key=lambda it: _bone_depth(arm, it[1]))
+    bpy.ops.object.select_all(action='DESELECT'); arm.select_set(True); bpy.context.view_layer.objects.active = arm
+    bpy.ops.object.mode_set(mode='POSE')
+    for role, bname in items:
+        spec = rr[role]; axis = V(spec.get("axis", [1, 0, 0])).normalized(); deg = float(spec.get("deg", 0))
+        delta = mathutils.Matrix.Rotation(math.radians(deg), 3, axis)         # world-axis rotation (Blender Z-up)
+        bpy.context.view_layer.update()
+        pb = arm.pose.bones[bname]; cur = pb.matrix.copy()
+        new = (delta @ cur.to_3x3()).to_4x4(); new.translation = cur.translation   # premultiply world delta; keep FK head
+        pb.matrix = new
+    bpy.ops.object.mode_set(mode='OBJECT')
+    print(f"[posed-roles] {len(items)} role(s): {[r for r, _ in items]}", flush=True)
 
 def rig_character(char_glb, block, assets, out):
     bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -174,7 +192,16 @@ def rig_character(char_glb, block, assets, out):
     charmesh = max([m for m in bpy.context.scene.objects if m.type == "MESH"], key=lambda m: len(m.data.vertices))
     zs = [(charmesh.matrix_world @ v.co).z for v in charmesh.data.vertices]; figureH = max(zs) - min(zs)
     print(f"[char] {os.path.basename(char_glb)}  figureH={figureH:.3f}  weapons={len(block.get('weapons', []))}  pose={'yes' if block.get('pose',{}).get('bones') else 'no'}", flush=True)
-    apply_pose(arm, block.get("pose"))                                     # pose + bake-as-rest BEFORE weapons (they attach to the posed hand)
+    _pose = block.get("pose") or {}                                       # pose BEFORE weapons (they ride the posed hand)
+    if _pose.get("roleRotations"): apply_role_pose(arm, _pose, block.get("roleMap", {}))
+    else: apply_pose(arm, _pose)
+    if _pose.get("roleRotations") or _pose.get("bones"):                  # bake the posed deformation into the mesh so the export carries it
+        for _m in [o for o in bpy.context.scene.objects if o.type == "MESH"]:
+            _am = [md for md in _m.modifiers if md.type == "ARMATURE"]
+            if _am:
+                bpy.ops.object.select_all(action='DESELECT'); _m.select_set(True); bpy.context.view_layer.objects.active = _m
+                try: bpy.ops.object.modifier_apply(modifier=_am[0].name)
+                except Exception as e: print(f"[pose] modifier_apply warn: {e}", flush=True)
     for w in block.get("weapons", []):
         place_v4(w, arm, assets) if "rootTransform" in w else place(w, arm, figureH, assets)
     for o in [m for m in list(bpy.context.scene.objects) if m.type == "MESH" and len(m.data.vertices) < 300]:
