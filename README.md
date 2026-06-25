@@ -89,10 +89,12 @@ The editor is the **placement authority**; the headless Blender step is the **ap
 | Path | What |
 |------|------|
 | [`app/sprite-motion.html`](app/sprite-motion.html) | **The editor** — self-contained offline HTML. Open it in any browser; double-right-click (or `Ctrl/⌘K`) for the command palette. |
+| [`app/sprite-motion.slim.html`](app/sprite-motion.slim.html) | Same editor, ~65 KB (sample images stubbed) — the build to **attach to Claude Design** for v2 work. |
 | [`pipeline/export_skeleton.py`](pipeline/export_skeleton.py) | Blender: dump a rigged GLB's armature → the skeleton JSON the editor loads (exact numbers). |
 | [`pipeline/apply_placement.py`](pipeline/apply_placement.py) | Blender: consume `placement.json` + weapon GLB(s) → attach each at its exact `attachPoint` (rotation + scale) → game-ready GLB. |
 | [`pipeline/placement.example.json`](pipeline/placement.example.json) | Example editor output (and the bridge's test input). |
-| [`docs/claude-design-prompt.md`](docs/claude-design-prompt.md) | The full build spec — paste into Claude Design, attach the three sample files, build the editor as standalone HTML. |
+| [`docs/claude-design-prompt.md`](docs/claude-design-prompt.md) | v1 build spec — paste into Claude Design, attach the three sample files, build the editor as standalone HTML. |
+| [`docs/claude-design-prompt-v2.md`](docs/claude-design-prompt-v2.md) | v2 build spec (expand the editor) — multi-character + bulk, reusable weapon/prop library, project save/load. Attach `app/sprite-motion.slim.html` and extend. |
 | `public/samples/blackguard.skeleton.json` | Real 40-bone skeleton (the embedded sample). |
 | `public/samples/blackguard.front.png` | Body sprite for the reference layer. |
 | `public/samples/halberd.png` | Transparent halberd prop. |

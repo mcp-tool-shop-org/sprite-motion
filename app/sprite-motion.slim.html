@@ -1,0 +1,1064 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sprite-motion</title>
+<style>
+  :root{
+    --bg:#16161a; --panel:#1f1f25; --panel2:#1a1a1f; --border:#2e2e36;
+    --grid:#2b2b33; --axis:#4a4a58; --gridlabel:#7a7a88;
+    --deform:#7fd4e6; --nondeform:#b98bf0; --joint:#cfd6dd; --amber:#f0a830;
+    --text:#cfd6dd; --dim:#7a7a88; --dim2:#5b5b66;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:13px;overflow:hidden;-webkit-font-smoothing:antialiased}
+  button{font-family:inherit}
+
+  #app{display:grid;grid-template-rows:auto 1fr;height:100vh}
+
+  /* ---- toolbar ---- */
+  .toolbar{display:flex;align-items:center;gap:6px;padding:8px 12px;background:var(--panel);border-bottom:1px solid var(--border);flex-wrap:wrap}
+  .brand{display:flex;align-items:baseline;gap:8px;margin-right:6px;user-select:none}
+  .brand b{font-weight:650;letter-spacing:.2px;font-size:13.5px}
+  .brand span{font-family:var(--mono);font-size:10.5px;color:var(--dim2)}
+  .tdiv{width:1px;height:22px;background:var(--border);margin:0 4px}
+  .tspacer{flex:1}
+  .btn{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 11px;background:#26262e;color:var(--text);
+    border:1px solid var(--border);border-radius:4px;font-size:12px;cursor:pointer;white-space:nowrap;transition:background .12s,border-color .12s}
+  .btn:hover{background:#30303a;border-color:#3c3c46}
+  .btn:active{background:#2a2a33}
+  .btn.amber{background:var(--amber);color:#1a1206;border-color:#c98a22;font-weight:600}
+  .btn.amber:hover{background:#f5b54a}
+  .btn.ghost{background:transparent}
+  .btn.ghost:hover{background:#26262e}
+  .btn svg{width:13px;height:13px;display:block}
+  .toggles{display:flex;gap:2px;background:var(--panel2);border:1px solid var(--border);border-radius:5px;padding:2px}
+  .tog{height:24px;padding:0 9px;display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--dim);background:transparent;border:none;border-radius:3px;cursor:pointer}
+  .tog .dot{width:7px;height:7px;border-radius:50%;background:#3a3a44}
+  .tog.on{color:var(--text);background:#2a2a33}
+  .tog.on .dot{background:var(--amber)}
+
+  /* ---- body ---- */
+  .body{display:grid;grid-template-columns:1fr 288px;min-height:0}
+  .stage{position:relative;min-width:0;overflow:hidden;background:
+    radial-gradient(circle at 50% 42%, #1b1b21 0%, #141418 78%)}
+  /* plot area is inset to leave fixed axis-ruler gutters (z=left, x=bottom) */
+  svg.canvas{position:absolute;left:50px;top:0;width:calc(100% - 50px);height:calc(100% - 26px);display:block;touch-action:none;cursor:default}
+  svg.canvas.panning{cursor:grabbing}
+
+  /* ---- axis rulers (fixed gutters, screen-space ticks) ---- */
+  .ruler-z{position:absolute;left:0;top:0;bottom:26px;width:50px;background:#191920;border-right:1px solid var(--border);overflow:hidden;pointer-events:none}
+  .ruler-x{position:absolute;left:50px;right:0;bottom:0;height:26px;background:#191920;border-top:1px solid var(--border);overflow:hidden;pointer-events:none}
+  .ruler-corner{position:absolute;left:0;bottom:0;width:50px;height:26px;background:#15151a;border-top:1px solid var(--border);border-right:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:8.5px;color:var(--dim2);letter-spacing:.5px}
+  .tk{position:absolute;background:#34343e}
+  .tkx{bottom:0;width:1px;height:5px}
+  .tkx.maj{height:8px;background:#4d4d59}
+  .tkx.ax{height:11px;background:var(--amber);width:1px}
+  .tkz{right:0;height:1px;width:5px}
+  .tkz.maj{width:8px;background:#4d4d59}
+  .tkz.ax{width:11px;background:var(--amber);height:1px}
+  .tlx{position:absolute;bottom:9px;transform:translateX(-50%);font-family:var(--mono);font-size:9.5px;color:var(--gridlabel);white-space:nowrap}
+  .tlz{position:absolute;right:10px;transform:translateY(-50%);font-family:var(--mono);font-size:9.5px;color:var(--gridlabel);white-space:nowrap;text-align:right}
+  .tlx.ax,.tlz.ax{color:var(--amber)}
+
+  /* tracking crosshair + axis cursor chips */
+  .cross-v{position:absolute;top:0;bottom:26px;width:1px;background:rgba(240,168,48,.32);pointer-events:none;display:none;z-index:3}
+  .cross-h{position:absolute;left:50px;right:0;height:1px;background:rgba(240,168,48,.32);pointer-events:none;display:none;z-index:3}
+  .cur-x{position:absolute;bottom:3px;transform:translateX(-50%);background:var(--amber);color:#1a1206;font-family:var(--mono);font-size:9px;font-weight:600;padding:1px 4px;border-radius:2px;pointer-events:none;display:none;white-space:nowrap;z-index:4}
+  .cur-z{position:absolute;right:3px;transform:translateY(-50%);background:var(--amber);color:#1a1206;font-family:var(--mono);font-size:9px;font-weight:600;padding:1px 4px;border-radius:2px;pointer-events:none;display:none;white-space:nowrap;z-index:4}
+
+  .axislegend{position:absolute;left:60px;top:10px;font-family:var(--mono);font-size:10px;color:var(--dim);
+    background:rgba(20,20,24,.72);border:1px solid var(--border);border-radius:4px;padding:5px 9px;pointer-events:none;display:flex;gap:12px;backdrop-filter:blur(3px)}
+  .axislegend i{font-style:normal;color:var(--dim2)}
+  .axislegend b{font-weight:600}
+  .readout{position:absolute;left:60px;bottom:36px;font-family:var(--mono);font-size:11.5px;color:var(--text);
+    background:rgba(20,20,24,.82);border:1px solid var(--border);border-radius:5px;padding:6px 10px;
+    display:flex;gap:14px;pointer-events:none;backdrop-filter:blur(3px)}
+  .readout .k{color:var(--dim2)}
+  .readout b{font-weight:600}
+  .readout .ax{color:var(--amber)}
+  .scalebar{position:absolute;right:12px;bottom:36px;font-family:var(--mono);font-size:10px;color:var(--dim);
+    background:rgba(20,20,24,.72);border:1px solid var(--border);border-radius:5px;padding:7px 10px;pointer-events:none;display:flex;flex-direction:column;gap:5px;align-items:flex-end;backdrop-filter:blur(3px)}
+  .scalebar .bwrap{display:flex;align-items:center;gap:7px}
+  .scalebar .bar{height:7px;border-left:1.5px solid var(--text);border-right:1.5px solid var(--text);border-bottom:1.5px solid var(--text);box-sizing:border-box}
+  .scalebar .z{color:var(--dim2)}
+  .zhint{position:absolute;right:12px;top:10px;font-family:var(--mono);font-size:10px;color:var(--dim2);
+    background:rgba(20,20,24,.62);border:1px solid var(--border);border-radius:5px;padding:5px 9px;pointer-events:none}
+  .floatlabel{position:absolute;font-family:var(--mono);font-size:10.5px;color:#1a1206;background:var(--amber);
+    padding:2px 6px;border-radius:3px;pointer-events:none;transform:translate(10px,-26px);white-space:nowrap;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+
+  /* ---- inspector ---- */
+  .inspector{background:var(--panel);border-left:1px solid var(--border);overflow-y:auto;display:flex;flex-direction:column}
+  .insp-head{padding:11px 14px 9px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--panel);z-index:2}
+  .insp-kind{font-size:10px;letter-spacing:1.4px;text-transform:uppercase;color:var(--dim2);font-weight:600}
+  .insp-title{font-family:var(--mono);font-size:14px;color:var(--text);margin-top:3px;display:flex;align-items:center;gap:7px}
+  .insp-title .chip{font-family:var(--sans);font-size:9.5px;letter-spacing:.5px;text-transform:uppercase;padding:1px 6px;border-radius:3px;background:#2a2a33;color:var(--dim)}
+  .insp-body{padding:6px 14px 24px}
+  .sec{padding:12px 0;border-bottom:1px solid var(--border)}
+  .sec:last-child{border-bottom:none}
+  .sec-h{font-size:10px;letter-spacing:1.2px;text-transform:uppercase;color:var(--dim2);font-weight:600;margin-bottom:9px;display:flex;align-items:center;justify-content:space-between}
+  .row{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+  .row label{flex:0 0 64px;color:var(--dim);font-size:11.5px}
+  .row .grow{flex:1}
+  .vec{display:flex;gap:5px;flex:1}
+  .fld{flex:1;min-width:0;height:26px;background:var(--panel2);border:1px solid var(--border);border-radius:4px;color:var(--text);
+    font-family:var(--mono);font-size:11.5px;padding:0 7px;width:100%}
+  .fld:focus{outline:none;border-color:var(--amber);background:#16161a}
+  .fld.ro{color:var(--dim);background:#191920;cursor:default}
+  .fld[data-axis]::before{content:attr(data-axis)}
+  .axlabel{font-family:var(--mono);font-size:9px;color:var(--dim2);width:9px;text-align:center;align-self:center}
+  select.fld{appearance:none;cursor:pointer;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'><path d='M2 4l3 3 3-3' stroke='%237a7a88' fill='none' stroke-width='1.3'/></svg>");background-repeat:no-repeat;background-position:right 7px center;padding-right:22px}
+  input[type=range]{-webkit-appearance:none;appearance:none;height:4px;background:#2a2a33;border-radius:3px;flex:1;outline:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;border-radius:50%;background:var(--amber);cursor:pointer;border:2px solid #1a1206}
+  input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;background:var(--amber);cursor:pointer;border:2px solid #1a1206}
+  .num{flex:0 0 56px}
+  .kv{display:flex;justify-content:space-between;font-size:11.5px;margin-bottom:5px}
+  .kv .k{color:var(--dim)}
+  .kv .v{font-family:var(--mono);color:var(--text)}
+  .attach{background:#191920;border:1px solid var(--border);border-radius:5px;padding:9px 10px;margin-top:4px}
+  .attach .lbl{font-size:9.5px;letter-spacing:.6px;text-transform:uppercase;color:var(--dim2);margin-bottom:5px;display:flex;align-items:center;gap:6px}
+  .attach .lbl .d{width:6px;height:6px;border-radius:50%;background:var(--amber)}
+  .attach .val{font-family:var(--mono);font-size:13px;color:var(--amber);letter-spacing:.3px}
+  .grip{margin-top:4px}
+  .grip .thumb{position:relative;width:100%;max-width:150px;border:1px solid var(--border);border-radius:5px;overflow:hidden;
+    background:repeating-conic-gradient(#23232a 0% 25%, #1c1c22 0% 50%) 50%/14px 14px;cursor:crosshair;margin:0 auto}
+  .grip .thumb img{display:block;width:100%;pointer-events:none}
+  .grip .mk{position:absolute;width:12px;height:12px;margin:-6px 0 0 -6px;border:2px solid var(--amber);border-radius:50%;
+    box-shadow:0 0 0 1px rgba(0,0,0,.6);pointer-events:none}
+  .grip .mk::after{content:"";position:absolute;inset:3px;border-radius:50%;background:var(--amber)}
+  .grip .hint{font-size:10.5px;color:var(--dim2);text-align:center;margin-top:6px}
+  .toolbtn{display:flex;gap:6px;margin-bottom:8px}
+  .btn.danger{color:#e88;border-color:#43282b}
+  .btn.danger:hover{background:#2e1f22}
+  .empty{color:var(--dim2);font-size:11.5px;line-height:1.6;padding:2px 0}
+  .checkbox{display:inline-flex;align-items:center;gap:6px;cursor:pointer;color:var(--dim);font-size:11.5px;user-select:none}
+  .checkbox .bx{width:15px;height:15px;border:1px solid var(--border);border-radius:3px;background:var(--panel2);display:inline-flex;align-items:center;justify-content:center}
+  .checkbox.on .bx{background:var(--amber);border-color:var(--amber)}
+  .checkbox.on .bx svg{display:block}
+  .checkbox .bx svg{width:10px;height:10px;display:none}
+
+  /* paste modal */
+  .modal{position:fixed;inset:0;background:rgba(8,8,10,.6);display:none;align-items:center;justify-content:center;z-index:30;backdrop-filter:blur(2px)}
+  .modal.open{display:flex}
+  .modal .card{width:min(560px,92vw);background:var(--panel);border:1px solid var(--border);border-radius:8px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+  .modal .hd{padding:12px 16px;border-bottom:1px solid var(--border);font-size:12.5px;display:flex;justify-content:space-between;align-items:center}
+  .modal textarea{width:100%;height:300px;background:var(--panel2);border:none;color:var(--text);font-family:var(--mono);font-size:11.5px;padding:14px 16px;resize:none;outline:none}
+  .modal .ft{padding:11px 16px;display:flex;justify-content:flex-end;gap:8px;border-top:1px solid var(--border)}
+  .modal .err{color:#e88;font-size:11px;font-family:var(--mono);margin-right:auto;align-self:center}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#26262e;border:1px solid var(--border);
+    color:var(--text);font-size:12px;padding:9px 16px;border-radius:6px;z-index:40;opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;box-shadow:0 8px 24px rgba(0,0,0,.4)}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(-4px)}
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-thumb{background:#33333d;border-radius:6px;border:2px solid var(--panel)}
+  ::-webkit-scrollbar-track{background:transparent}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="toolbar">
+    <div class="brand"><b>sprite-motion</b><span>bone-space placement</span></div>
+    <div class="tdiv"></div>
+    <button class="btn amber" id="btnSample" title="Load the embedded blackguard skeleton, sprite & halberd">Load blackguard sample</button>
+    <button class="btn" id="btnLoadSkel">Load skeleton…</button>
+    <button class="btn ghost" id="btnPaste">Paste JSON</button>
+    <div class="tdiv"></div>
+    <button class="btn" id="btnSprite">Upload sprite…</button>
+    <button class="btn" id="btnWeapon">Add weapon…</button>
+    <div class="tspacer"></div>
+    <div class="toggles" id="toggles">
+      <button class="tog on" data-tg="grid"><span class="dot"></span>Grid</button>
+      <button class="tog on" data-tg="labels"><span class="dot"></span>Labels</button>
+      <button class="tog on" data-tg="sprite"><span class="dot"></span>Sprite</button>
+      <button class="tog on" data-tg="bones"><span class="dot"></span>Bones</button>
+    </div>
+    <div class="tdiv"></div>
+    <button class="btn" id="btnExportSkel" title="Re-emit skeleton in input schema">Export skeleton</button>
+    <button class="btn amber" id="btnExport">Export JSON</button>
+  </div>
+
+  <div class="body">
+    <div class="stage" id="stage">
+      <svg class="canvas" id="svg" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" preserveAspectRatio="xMidYMid meet"></svg>
+      <div class="ruler-z" id="rulerZ"></div>
+      <div class="ruler-x" id="rulerX"></div>
+      <div class="ruler-corner">z↑<br>x→</div>
+      <div class="cross-v" id="crossV"></div>
+      <div class="cross-h" id="crossH"></div>
+      <div class="cur-x" id="curX"></div>
+      <div class="cur-z" id="curZ"></div>
+      <div class="axislegend"><span><i>x</i> <b style="color:var(--text)">right</b></span><span><i>z</i> <b style="color:var(--text)">up</b></span><span><i>facing</i> <b style="color:var(--text)">−Y</b></span></div>
+      <div class="zhint" id="zhint">drag to pan · scroll to zoom · double-right-click for commands</div>
+      <div class="readout" id="readout"><span><span class="k">x</span> <b id="rx">—</b></span><span><span class="k">z</span> <b id="rz">—</b></span></div>
+      <div class="scalebar" id="scalebar"><div class="bwrap"><span id="sbLabel">0.1</span><span class="bar" id="sbBar" style="width:40px"></span></div><div class="z" id="sbZoom">—</div></div>
+      <div class="floatlabel" id="floatlabel" style="display:none"></div>
+    </div>
+    <div class="inspector"><div id="insp"></div></div>
+  </div>
+</div>
+
+<div class="modal" id="pasteModal">
+  <div class="card">
+    <div class="hd"><span>Paste skeleton JSON</span><button class="btn ghost" id="pasteClose">✕</button></div>
+    <textarea id="pasteArea" placeholder='{ "name": "...", "facing": "-Y", "bbox": {...}, "bones": [...] }' spellcheck="false"></textarea>
+    <div class="ft"><span class="err" id="pasteErr"></span><button class="btn" id="pasteCancel">Cancel</button><button class="btn amber" id="pasteLoad">Load</button></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<input type="file" id="fileSkel" accept=".json,application/json" style="display:none">
+<input type="file" id="fileSprite" accept="image/png,image/jpeg,image/*" style="display:none">
+<input type="file" id="fileWeapon" accept="image/png,image/*" style="display:none">
+
+<template id="__bundler_thumbnail">
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+    <rect width="100" height="100" fill="#16161a"/>
+    <g stroke="#2b2b33" stroke-width="1"><line x1="30" y1="0" x2="30" y2="100"/><line x1="70" y1="0" x2="70" y2="100"/><line x1="0" y1="30" x2="100" y2="30"/><line x1="0" y1="70" x2="100" y2="70"/></g>
+    <line x1="50" y1="0" x2="50" y2="100" stroke="#4a4a58" stroke-width="1.2"/>
+    <line x1="50" y1="44" x2="72" y2="58" stroke="#7fd4e6" stroke-width="2.4"/>
+    <circle cx="50" cy="44" r="3.4" fill="#cfd6dd"/>
+    <circle cx="72" cy="58" r="3.4" fill="#f0a830"/>
+  </svg>
+</template>
+
+<script id="sample-skeleton" type="application/json">{"name":"blackguard_dec_rigged","facing":"-Y","bbox":{"x":[-0.3015,0.3018],"y":[-0.1552,0.1536],"z":[-0.5016,0.501]},"bones":[{"name":"bone_0","parent":null,"head":[0.0021,0.0051,0.0486],"tail":[0.0021,0.0051,0.0956],"deform":true},{"name":"bone_1","parent":"bone_0","head":[0.0021,0.0051,0.0956],"tail":[0.0021,0.009,0.1544],"deform":true},{"name":"bone_2","parent":"bone_1","head":[0.0021,0.009,0.1544],"tail":[0.0021,0.0129,0.2171],"deform":true},{"name":"bone_3","parent":"bone_2","head":[0.0021,0.0129,0.2171],"tail":[0.0021,0.0171,0.2836],"deform":true},{"name":"bone_4","parent":"bone_3","head":[0.0021,0.0168,0.2915],"tail":[0.0021,0.0051,0.3267],"deform":true},{"name":"bone_5","parent":"bone_4","head":[0.0021,0.0051,0.3267],"tail":[0.0021,-0.0067,0.362],"deform":true},{"name":"bone_6","parent":"bone_3","head":[0.0334,0.0168,0.2758],"tail":[0.1,0.0168,0.2445],"deform":true},{"name":"bone_7","parent":"bone_6","head":[0.1,0.0168,0.2445],"tail":[0.1587,0.0168,0.1309],"deform":true},{"name":"bone_8","parent":"bone_7","head":[0.1587,0.0168,0.1309],"tail":[0.2292,0.009,0.0291],"deform":true},{"name":"bone_9","parent":"bone_8","head":[0.2292,0.009,0.0291],"tail":[0.2488,0.0068,0.0009],"deform":true},{"name":"bone_10","parent":"bone_9","head":[0.2527,-0.0067,0.0095],"tail":[0.2684,-0.0184,-0.0101],"deform":true},{"name":"bone_11","parent":"bone_10","head":[0.2684,-0.0184,-0.0101],"tail":[0.2802,-0.0263,-0.0219],"deform":true},{"name":"bone_12","parent":"bone_11","head":[0.2802,-0.0263,-0.0219],"tail":[0.2919,-0.0341,-0.0336],"deform":true},{"name":"bone_13","parent":"bone_9","head":[0.2723,-0.0106,-0.0297],"tail":[0.2762,-0.0106,-0.0414],"deform":true},{"name":"bone_14","parent":"bone_13","head":[0.2762,-0.0106,-0.0414],"tail":[0.2802,-0.0145,-0.0532],"deform":true},{"name":"bone_15","parent":"bone_14","head":[0.2802,-0.0145,-0.0532],"tail":[0.2841,-0.0184,-0.0649],"deform":true},{"name":"bone_16","parent":"bone_9","head":[0.2567,0.009,-0.0375],"tail":[0.2606,0.0051,-0.0493],"deform":true},{"name":"bone_17","parent":"bone_16","head":[0.2606,0.0051,-0.0493],"tail":[0.2645,-0.0028,-0.061],"deform":true},{"name":"bone_18","parent":"bone_17","head":[0.2645,-0.0028,-0.061],"tail":[0.2684,-0.0106,-0.0728],"deform":true},{"name":"bone_19","parent":"bone_3","head":[-0.0293,0.0168,0.2758],"tail":[-0.0958,0.0168,0.2445],"deform":true},{"name":"bone_20","parent":"bone_19","head":[-0.0958,0.0168,0.2445],"tail":[-0.1546,0.0168,0.1309],"deform":true},{"name":"bone_21","parent":"bone_20","head":[-0.1546,0.0168,0.1309],"tail":[-0.2251,0.009,0.0291],"deform":true},{"name":"bone_22","parent":"bone_21","head":[-0.2251,0.009,0.0291],"tail":[-0.2432,0.007,0.003],"deform":true},{"name":"bone_23","parent":"bone_22","head":[-0.2447,-0.0106,0.0134],"tail":[-0.2603,-0.0224,0.0056],"deform":true},{"name":"bone_24","parent":"bone_23","head":[-0.2603,-0.0224,0.0056],"tail":[-0.276,-0.0341,0.0016],"deform":true},{"name":"bone_25","parent":"bone_24","head":[-0.276,-0.0341,0.0016],"tail":[-0.2917,-0.0459,-0.0023],"deform":true},{"name":"bone_26","parent":"bone_22","head":[-0.2643,-0.0106,-0.0219],"tail":[-0.2721,-0.0106,-0.0336],"deform":true},{"name":"bone_27","parent":"bone_26","head":[-0.2721,-0.0106,-0.0336],"tail":[-0.276,-0.0145,-0.0493],"deform":true},{"name":"bone_28","parent":"bone_27","head":[-0.276,-0.0145,-0.0493],"tail":[-0.2799,-0.0184,-0.0649],"deform":true},{"name":"bone_29","parent":"bone_22","head":[-0.2525,0.009,-0.0297],"tail":[-0.2564,0.0051,-0.0454],"deform":true},{"name":"bone_30","parent":"bone_29","head":[-0.2564,0.0051,-0.0454],"tail":[-0.2603,-0.0028,-0.0571],"deform":true},{"name":"bone_31","parent":"bone_30","head":[-0.2603,-0.0028,-0.0571],"tail":[-0.2643,-0.0106,-0.0689],"deform":true},{"name":"bone_32","parent":"bone_0","head":[0.0569,-0.0067,0.0212],"tail":[0.0804,-0.0028,-0.2099],"deform":true},{"name":"bone_33","parent":"bone_32","head":[0.0804,-0.0028,-0.2099],"tail":[0.1157,0.0129,-0.437],"deform":true},{"name":"bone_34","parent":"bone_33","head":[0.1157,0.0129,-0.437],"tail":[0.1392,-0.0929,-0.4997],"deform":true},{"name":"bone_35","parent":"bone_34","head":[0.1392,-0.0929,-0.4997],"tail":[0.1627,-0.1986,-0.5624],"deform":true},{"name":"bone_36","parent":"bone_0","head":[-0.0528,-0.0028,0.0212],"tail":[-0.0763,-0.0028,-0.2099],"deform":true},{"name":"bone_37","parent":"bone_36","head":[-0.0763,-0.0028,-0.2099],"tail":[-0.1115,0.0129,-0.437],"deform":true},{"name":"bone_38","parent":"bone_37","head":[-0.1115,0.0129,-0.437],"tail":[-0.135,-0.0929,-0.4997],"deform":true},{"name":"bone_39","parent":"bone_38","head":[-0.135,-0.0929,-0.4997],"tail":[-0.1585,-0.1986,-0.5624],"deform":true}]}</script>
+
+<script>
+"use strict";
+(function(){
+  // ---------- constants ----------
+  var SAMPLE_SPRITE = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+  var SAMPLE_WEAPON = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+
+  // ---------- helpers ----------
+  function round(n){ return Math.round(n*1e4)/1e4; }
+  function f4(n){ return (n<0?"":" ")+ n.toFixed(4); }
+  function f4s(n){ return n.toFixed(4); }
+  // grid label formatting (short)
+  function fmt(n){ if(Math.abs(n)<1e-9) return "0"; var s=n.toFixed(2); return s.replace(/\.?0+$/,""); }
+  function clamp(n,a,b){ return n<a?a:n>b?b:n; }
+  var SVGNS = "http://www.w3.org/2000/svg";
+
+  // bone-space (x right, z up) -> svg (x, -z)
+  function toSvgX(x){ return x; }
+  function toSvgY(z){ return -z; }
+
+  function fitView(bbox, pad){
+    pad = pad==null?0.18:pad;
+    var x0=bbox.x[0], x1=bbox.x[1], z0=bbox.z[0], z1=bbox.z[1];
+    var w=x1-x0, h=z1-z0;
+    var px=w*pad+0.04, pz=h*pad+0.04;
+    return { x:x0-px, y:-(z1+pz), w:w+2*px, h:h+2*pz };
+  }
+  function gridStep(view){
+    var span=Math.max(view.w,view.h);
+    var raw=span/11;
+    var pow=Math.pow(10,Math.floor(Math.log10(raw)));
+    var n=raw/pow;
+    var nice = n<1.5?1 : n<3.5?2 : n<7.5?5 : 10;
+    return nice*pow;
+  }
+
+  // ---------- state ----------
+  var S = {
+    skeleton:null,
+    sprite:{ src:null, aspect:0.74, cx:0, cz:0, height:1.3, opacity:0.8, visible:true },
+    weapons:[],
+    sel:{kind:null,id:null},
+    view:{ x:-0.5, y:-0.7, w:1.0, h:1.4 },
+    show:{ grid:true, labels:true, sprite:true, bones:true }
+  };
+  var WID=0;
+
+  // ---------- dom ----------
+  var svg = document.getElementById("svg");
+  var stage = document.getElementById("stage");
+  var insp = document.getElementById("insp");
+  var readoutX = document.getElementById("rx");
+  var readoutZ = document.getElementById("rz");
+  var floatlabel = document.getElementById("floatlabel");
+  var rulerX = document.getElementById("rulerX");
+  var rulerZ = document.getElementById("rulerZ");
+  var crossV = document.getElementById("crossV");
+  var crossH = document.getElementById("crossH");
+  var curX = document.getElementById("curX");
+  var curZ = document.getElementById("curZ");
+  var sbBar = document.getElementById("sbBar");
+  var sbLabel = document.getElementById("sbLabel");
+  var sbZoom = document.getElementById("sbZoom");
+
+  // ---------- coordinate transforms ----------
+  function clientToSvg(cx,cy){
+    var pt = svg.createSVGPoint(); pt.x=cx; pt.y=cy;
+    var p = pt.matrixTransform(svg.getScreenCTM().inverse());
+    return [p.x,p.y];
+  }
+  function cursorBone(cx,cy){ var p=clientToSvg(cx,cy); return [p[0], -p[1]]; }
+
+  // forward map: bone-space (x,z) -> stage-local pixels (accounts for letterbox via CTM)
+  function userToStage(ux,uz){
+    var m=svg.getScreenCTM(); if(!m) return null;
+    var sy=-uz; // svg-y
+    var px=m.a*ux + m.c*sy + m.e;
+    var py=m.b*ux + m.d*sy + m.f;
+    var rc=stage.getBoundingClientRect();
+    return [px-rc.left, py-rc.top];
+  }
+
+  // axis rulers in the fixed gutters: ticks where bone-space gridlines project
+  var GUT_L=50, GUT_B=26;
+  function rlabel(n){ if(Math.abs(n)<1e-9) return "0"; return n.toFixed(Math.abs(n)<0.1?3:2).replace(/(\.\d*?)0+$/,"$1").replace(/\.$/,""); }
+  function renderRulers(){
+    var m=svg.getScreenCTM(); if(!m){ return; }
+    var rc=stage.getBoundingClientRect();
+    var plotW=rc.width-GUT_L, plotH=rc.height-GUT_B;
+    if(plotW<=0||plotH<=0) return;
+    var v=S.view;
+    var step=gridStep(v), minor=step/5;
+    var labels=S.show.labels;
+    var zTop=-v.y, zBot=-(v.y+v.h);
+    var xh=[], zh=[];
+    // X ticks
+    for(var k=Math.ceil(v.x/minor); k*minor<=v.x+v.w+1e-9; k++){
+      var xv=k*minor; var p=userToStage(xv,0); if(!p) break;
+      var lx=p[0]-GUT_L; if(lx<-2||lx>plotW+2) continue;
+      var maj=Math.abs(xv/step-Math.round(xv/step))<1e-6;
+      var ax=Math.abs(xv)<1e-9;
+      xh.push('<span class="tk tkx'+(ax?' ax':maj?' maj':'')+'" style="left:'+lx+'px"></span>');
+      if(labels && (maj||ax)) xh.push('<span class="tlx'+(ax?' ax':'')+'" style="left:'+lx+'px">'+rlabel(xv)+'</span>');
+    }
+    // Z ticks
+    for(var j=Math.ceil(zBot/minor); j*minor<=zTop+1e-9; j++){
+      var zv=j*minor; var q=userToStage(0,zv); if(!q) break;
+      var ly=q[1]; if(ly<-2||ly>plotH+2) continue;
+      var majz=Math.abs(zv/step-Math.round(zv/step))<1e-6;
+      var axz=Math.abs(zv)<1e-9;
+      zh.push('<span class="tk tkz'+(axz?' ax':majz?' maj':'')+'" style="top:'+ly+'px"></span>');
+      if(labels && (majz||axz)) zh.push('<span class="tlz'+(axz?' ax':'')+'" style="top:'+ly+'px">'+rlabel(zv)+'</span>');
+    }
+    rulerX.innerHTML=xh.join("");
+    rulerZ.innerHTML=zh.join("");
+    // scale bar + zoom readout
+    var o=userToStage(0,0), e=userToStage(step,0);
+    if(o&&e){
+      var pxPerStep=Math.abs(e[0]-o[0]);
+      sbBar.style.width=pxPerStep.toFixed(1)+"px";
+      sbLabel.textContent=rlabel(step)+" unit";
+      var pxPerUnit=pxPerStep/step;
+      sbZoom.textContent=pxPerUnit.toFixed(0)+" px / unit";
+    }
+  }
+
+  // tracking crosshair following the cursor across the plot
+  function updateCrosshair(clientX,clientY){
+    var rc=stage.getBoundingClientRect();
+    var px=clientX-rc.left, py=clientY-rc.top;
+    var plotH=rc.height-GUT_B;
+    if(px<GUT_L||px>rc.width||py<0||py>plotH){ hideCrosshair(); return; }
+    var c=cursorBone(clientX,clientY);
+    crossV.style.display="block"; crossV.style.left=px+"px";
+    crossH.style.display="block"; crossH.style.top=py+"px";
+    curX.style.display="block"; curX.style.left=px+"px"; curX.textContent=c[0].toFixed(3);
+    curZ.style.display="block"; curZ.style.top=py+"px"; curZ.textContent=c[1].toFixed(3);
+    readoutX.textContent=f4s(c[0]); readoutZ.textContent=f4s(c[1]);
+  }
+  function hideCrosshair(){ crossV.style.display="none"; crossH.style.display="none"; curX.style.display="none"; curZ.style.display="none"; }
+
+  // ---------- selection helpers ----------
+  function selBone(){ return S.sel.kind==="bone" ? boneByName(S.sel.id) : null; }
+  function selWeapon(){ return S.sel.kind==="weapon" ? S.weapons.find(function(w){return w.id===S.sel.id;}) : null; }
+  function boneByName(n){ return S.skeleton ? S.skeleton.bones.find(function(b){return b.name===n;}) : null; }
+  function skelH(){ return S.skeleton ? (S.skeleton.bbox.z[1]-S.skeleton.bbox.z[0]) : 1; }
+  function attachPoint(w){
+    var b=boneByName(w.bone); if(!b) return null;
+    return [ round(b.head[0]+w.offset[0]), round(b.head[1]), round(b.head[2]+w.offset[1]) ];
+  }
+
+  function select(kind,id){ S.sel={kind:kind,id:id}; renderCanvas(); renderInspector(); }
+
+  // ---------- canvas render ----------
+  var dragState=null;
+
+  function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;"); }
+
+  function renderCanvas(){
+    var v=S.view;
+    svg.setAttribute("viewBox", v.x+" "+v.y+" "+v.w+" "+v.h);
+    var r = v.w*0.009;                  // joint radius (≈constant on-screen)
+    var sk=skelH();
+    var out=[];
+
+    // ---- grid (three tiers: minor / major / axis) ----
+    if(S.show.grid){
+      var step=gridStep(v);
+      var minor=step/5;
+      var zTop=-v.y, zBot=-(v.y+v.h);
+      out.push('<g>');
+      // minor gridlines
+      for(var km=Math.ceil(v.x/minor); km*minor<=v.x+v.w+1e-9; km++){
+        var xm=km*minor; if(Math.abs(xm/step-Math.round(xm/step))<1e-6) continue;
+        out.push('<line x1="'+xm+'" y1="'+(-zTop)+'" x2="'+xm+'" y2="'+(-zBot)+'" stroke="#202027" stroke-width="1" vector-effect="non-scaling-stroke"/>');
+      }
+      for(var jm=Math.ceil(zBot/minor); jm*minor<=zTop+1e-9; jm++){
+        var zm=jm*minor; if(Math.abs(zm/step-Math.round(zm/step))<1e-6) continue;
+        out.push('<line x1="'+v.x+'" y1="'+(-zm)+'" x2="'+(v.x+v.w)+'" y2="'+(-zm)+'" stroke="#202027" stroke-width="1" vector-effect="non-scaling-stroke"/>');
+      }
+      // major gridlines
+      for(var k=Math.ceil(v.x/step); k*step<=v.x+v.w+1e-9; k++){
+        var x=k*step; if(Math.abs(x)<1e-9) continue;
+        out.push('<line x1="'+x+'" y1="'+(-zTop)+'" x2="'+x+'" y2="'+(-zBot)+'" stroke="#2b2b33" stroke-width="1" vector-effect="non-scaling-stroke"/>');
+      }
+      for(var j=Math.ceil(zBot/step); j*step<=zTop+1e-9; j++){
+        var z=j*step; if(Math.abs(z)<1e-9) continue;
+        out.push('<line x1="'+v.x+'" y1="'+(-z)+'" x2="'+(v.x+v.w)+'" y2="'+(-z)+'" stroke="#2b2b33" stroke-width="1" vector-effect="non-scaling-stroke"/>');
+      }
+      // origin axes (drawn last so they sit on top)
+      if(0>=v.x && 0<=v.x+v.w) out.push('<line x1="0" y1="'+(-zTop)+'" x2="0" y2="'+(-zBot)+'" stroke="#4a4a58" stroke-width="1.4" vector-effect="non-scaling-stroke"/>');
+      if(0>=zBot && 0<=zTop) out.push('<line x1="'+v.x+'" y1="0" x2="'+(v.x+v.w)+'" y2="0" stroke="#4a4a58" stroke-width="1.4" vector-effect="non-scaling-stroke"/>');
+      // origin marker
+      if(0>=v.x&&0<=v.x+v.w&&0>=zBot&&0<=zTop){
+        var orad=v.w*0.012;
+        out.push('<circle cx="0" cy="0" r="'+orad+'" fill="none" stroke="#5b5b66" stroke-width="1" vector-effect="non-scaling-stroke"/>');
+      }
+      out.push('</g>');
+    }
+
+    // ---- sprite ----
+    if(S.show.sprite && S.sprite.src && S.sprite.visible){
+      var sw=S.sprite.height*S.sprite.aspect;
+      out.push('<image href="'+esc(S.sprite.src)+'" xlink:href="'+esc(S.sprite.src)+'" x="'+(S.sprite.cx-sw/2)+'" y="'+(-(S.sprite.cz+S.sprite.height/2))+'" width="'+sw+'" height="'+S.sprite.height+'" opacity="'+S.sprite.opacity+'" preserveAspectRatio="xMidYMid meet" style="pointer-events:none"/>');
+    }
+
+    // ---- weapons ----
+    S.weapons.forEach(function(w){
+      var b=boneByName(w.bone); if(!b) return;
+      var ax=b.head[0]+w.offset[0], az=b.head[2]+w.offset[1];
+      var gx=toSvgX(ax), gy=toSvgY(az);
+      var h=w.scale*sk, wd=h*w.aspect;
+      var ix=gx-w.grip[0]*wd, iy=gy-w.grip[1]*h;
+      var sel=(S.sel.kind==="weapon" && S.sel.id===w.id);
+      out.push('<g transform="rotate('+w.rotationDeg+' '+gx+' '+gy+')">');
+      out.push('<image href="'+esc(w.src)+'" xlink:href="'+esc(w.src)+'" x="'+ix+'" y="'+iy+'" width="'+wd+'" height="'+h+'" preserveAspectRatio="xMidYMid meet" data-wid="'+w.id+'" style="cursor:grab;filter:drop-shadow(0 '+(v.h*0.004)+'px '+(v.h*0.004)+'px rgba(0,0,0,.55))"/>');
+      if(sel){
+        out.push('<rect x="'+ix+'" y="'+iy+'" width="'+wd+'" height="'+h+'" fill="none" stroke="#f0a830" stroke-width="1.2" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"/>');
+        // rotate handle (sticks up from grip)
+        var rl=v.w*0.085;
+        out.push('<line x1="'+gx+'" y1="'+gy+'" x2="'+gx+'" y2="'+(gy-rl)+'" stroke="#f0a830" stroke-width="1.2" vector-effect="non-scaling-stroke"/>');
+        out.push('<circle cx="'+gx+'" cy="'+(gy-rl)+'" r="'+(r*0.85)+'" fill="#16161a" stroke="#f0a830" stroke-width="1.4" vector-effect="non-scaling-stroke" data-rot="'+w.id+'" style="cursor:grab"/>');
+        // scale handle (bottom-right corner of bbox)
+        out.push('<rect x="'+(ix+wd-r*0.8)+'" y="'+(iy+h-r*0.8)+'" width="'+(r*1.6)+'" height="'+(r*1.6)+'" fill="#16161a" stroke="#f0a830" stroke-width="1.4" vector-effect="non-scaling-stroke" data-scl="'+w.id+'" style="cursor:nwse-resize"/>');
+      }
+      // grip-anchor marker
+      out.push('<circle cx="'+gx+'" cy="'+gy+'" r="'+(r*0.62)+'" fill="#f0a830" stroke="#16161a" stroke-width="1.2" vector-effect="non-scaling-stroke" style="pointer-events:none"/>');
+      out.push('</g>');
+    });
+
+    // ---- skeleton ----
+    if(S.show.bones && S.skeleton){
+      out.push('<g>');
+      S.skeleton.bones.forEach(function(b){
+        var hx=toSvgX(b.head[0]), hy=toSvgY(b.head[2]);
+        var tx=toSvgX(b.tail[0]), ty=toSvgY(b.tail[2]);
+        if(b.deform){
+          out.push('<line x1="'+hx+'" y1="'+hy+'" x2="'+tx+'" y2="'+ty+'" stroke="#7fd4e6" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>');
+        }else{
+          out.push('<line x1="'+hx+'" y1="'+hy+'" x2="'+tx+'" y2="'+ty+'" stroke="#b98bf0" stroke-width="1.5" stroke-dasharray="3 3" stroke-linecap="round" opacity="0.85" vector-effect="non-scaling-stroke"/>');
+        }
+      });
+      S.skeleton.bones.forEach(function(b){
+        var hx=toSvgX(b.head[0]), hy=toSvgY(b.head[2]);
+        var sel=(S.sel.kind==="bone" && S.sel.id===b.name);
+        if(sel){
+          out.push('<circle cx="'+hx+'" cy="'+hy+'" r="'+(r*2.1)+'" fill="none" stroke="#f0a830" stroke-width="1.2" opacity="0.5" vector-effect="non-scaling-stroke" style="pointer-events:none"/>');
+        }
+        out.push('<circle cx="'+hx+'" cy="'+hy+'" r="'+(sel?r*1.45:r)+'" fill="'+(sel?'#f0a830':'#cfd6dd')+'" stroke="#16161a" stroke-width="1" vector-effect="non-scaling-stroke" data-bone="'+b.name+'" style="cursor:grab"/>');
+      });
+      out.push('</g>');
+    }
+
+    svg.innerHTML = out.join("");
+    renderRulers();
+
+    // wire pointer-down on interactive elements
+    svg.querySelectorAll("[data-bone]").forEach(function(el){
+      el.addEventListener("pointerdown", function(e){
+        e.stopPropagation();
+        var name=el.getAttribute("data-bone"); var b=boneByName(name);
+        select("bone",name);
+        dragState={kind:"bone",id:name,start:cursorBone(e.clientX,e.clientY),val:[b.head[0],b.head[2]]};
+      });
+    });
+    svg.querySelectorAll("[data-wid]").forEach(function(el){
+      el.addEventListener("pointerdown", function(e){
+        e.stopPropagation();
+        var id=el.getAttribute("data-wid"); var w=S.weapons.find(function(x){return x.id===id;});
+        select("weapon",id);
+        dragState={kind:"weapon",id:id,start:cursorBone(e.clientX,e.clientY),val:[w.offset[0],w.offset[1]]};
+      });
+    });
+    svg.querySelectorAll("[data-rot]").forEach(function(el){
+      el.addEventListener("pointerdown", function(e){
+        e.stopPropagation();
+        dragState={kind:"rotate",id:el.getAttribute("data-rot")};
+      });
+    });
+    svg.querySelectorAll("[data-scl]").forEach(function(el){
+      el.addEventListener("pointerdown", function(e){
+        e.stopPropagation();
+        var id=el.getAttribute("data-scl"); var w=S.weapons.find(function(x){return x.id===id;});
+        var c=cursorBone(e.clientX,e.clientY); var b=boneByName(w.bone);
+        var gx=b.head[0]+w.offset[0], gz=b.head[2]+w.offset[1];
+        var d=Math.hypot(c[0]-gx,c[1]-gz);
+        dragState={kind:"scale",id:id,start:d||1e-4,val:w.scale};
+      });
+    });
+  }
+
+  // ---------- inspector render ----------
+  function renderInspector(){
+    var w=selWeapon(), b=selBone();
+    if(w) renderWeaponInspector(w);
+    else if(b) renderBoneInspector(b);
+    else renderDefaultInspector();
+  }
+
+  function head(kind,title,chip){
+    return '<div class="insp-head"><div class="insp-kind">'+kind+'</div><div class="insp-title">'+esc(title)+(chip?'<span class="chip">'+chip+'</span>':'')+'</div></div>';
+  }
+
+  function renderDefaultInspector(){
+    var sk=S.skeleton;
+    var h='';
+    h+=head("Scene", sk?sk.name:"no skeleton");
+    h+='<div class="insp-body">';
+    h+='<div class="sec"><div class="sec-h">Skeleton</div>';
+    if(sk){
+      h+='<div class="kv"><span class="k">bones</span><span class="v">'+sk.bones.length+'</span></div>';
+      h+='<div class="kv"><span class="k">facing</span><span class="v">'+esc(sk.facing)+'</span></div>';
+      h+='<div class="kv"><span class="k">x range</span><span class="v">'+fmt(sk.bbox.x[0])+' … '+fmt(sk.bbox.x[1])+'</span></div>';
+      h+='<div class="kv"><span class="k">z range</span><span class="v">'+fmt(sk.bbox.z[0])+' … '+fmt(sk.bbox.z[1])+'</span></div>';
+    }else{
+      h+='<div class="empty">Load a skeleton to begin.<br>Click <b>Load blackguard sample</b>, upload a <b>.json</b>, or paste JSON.</div>';
+    }
+    h+='</div>';
+
+    // sprite controls
+    h+='<div class="sec"><div class="sec-h">Sprite reference</div>';
+    if(S.sprite.src){
+      h+=numRow("cx (x)","sp-cx",S.sprite.cx,0.001);
+      h+=numRow("cz (z)","sp-cz",S.sprite.cz,0.001);
+      h+=numRow("height","sp-h",S.sprite.height,0.001);
+      h+='<div class="row"><label>opacity</label><input type="range" id="sp-op" min="0" max="1" step="0.01" value="'+S.sprite.opacity+'"><input class="fld num" id="sp-opn" value="'+S.sprite.opacity.toFixed(2)+'"></div>';
+      h+='<div class="row"><label></label><div class="grow" id="sp-vis-wrap">'+checkbox("sp-vis","visible",S.sprite.visible)+'</div></div>';
+      h+='<div class="row"><button class="btn ghost" id="sp-clear" style="margin-left:72px">Remove sprite</button></div>';
+    }else{
+      h+='<div class="empty">No sprite loaded. Click <b>Upload sprite…</b> to place a reference image behind the skeleton.</div>';
+    }
+    h+='</div>';
+
+    // weapons list
+    h+='<div class="sec"><div class="sec-h">Weapons <span style="color:var(--dim2)">'+S.weapons.length+'</span></div>';
+    if(S.weapons.length){
+      S.weapons.forEach(function(wp){
+        h+='<div class="row"><button class="btn ghost" data-selw="'+wp.id+'" style="flex:1;justify-content:flex-start;font-family:var(--mono);font-size:11.5px">▸ '+esc(wp.asset)+' <span style="color:var(--dim2);margin-left:auto">'+esc(wp.bone)+'</span></button></div>';
+      });
+    }else{
+      h+='<div class="empty">No weapons. Click <b>Add weapon…</b> to attach a prop to a bone.</div>';
+    }
+    h+='</div>';
+    h+='</div>';
+    insp.innerHTML=h;
+    wireDefaultInspector();
+  }
+
+  function renderBoneInspector(b){
+    var h='';
+    h+=head("Bone", b.name, b.deform?"deform":"socket");
+    h+='<div class="insp-body">';
+    h+='<div class="sec"><div class="sec-h">Hierarchy</div>';
+    h+='<div class="kv"><span class="k">parent</span><span class="v">'+(b.parent?esc(b.parent):'—')+'</span></div>';
+    h+='<div class="kv"><span class="k">deform</span><span class="v">'+(b.deform?'yes':'no (socket)')+'</span></div>';
+    h+='</div>';
+    h+='<div class="sec"><div class="sec-h">Head <span style="color:var(--dim2)">x · y · z</span></div>';
+    h+=vec3Row("hd",b.head,["bn-hx","bn-hy","bn-hz"]);
+    h+='</div>';
+    h+='<div class="sec"><div class="sec-h">Tail <span style="color:var(--dim2)">x · y · z</span></div>';
+    h+=vec3Row("tl",b.tail,["bn-tx","bn-ty","bn-tz"]);
+    h+='</div>';
+    h+='<div class="sec"><div class="empty">Drag the joint on the canvas to move <b>head</b>; the parent\'s tail follows to keep the chain joined.</div></div>';
+    h+='</div>';
+    insp.innerHTML=h;
+    wireBoneInspector(b);
+  }
+
+  function renderWeaponInspector(w){
+    var ap=attachPoint(w);
+    var bones=S.skeleton?S.skeleton.bones:[];
+    var h='';
+    h+=head("Weapon", w.asset, w.bone);
+    h+='<div class="insp-body">';
+
+    h+='<div class="sec"><div class="sec-h">Attachment</div>';
+    h+='<div class="row"><label>bone</label><select class="fld" id="wp-bone">'+
+       bones.map(function(bb){ return '<option value="'+esc(bb.name)+'"'+(bb.name===w.bone?' selected':'')+'>'+esc(bb.name)+(bb.deform?'':' · socket')+'</option>'; }).join("")+
+       '</select></div>';
+    h+='<div class="attach"><div class="lbl"><span class="d"></span>resolved attach point&nbsp;·&nbsp;bone.head + offset</div><div class="val" id="wp-attach">'+
+       (ap?('('+f4s(ap[0])+',  '+f4s(ap[1])+',  '+f4s(ap[2])+')'):'—')+'</div></div>';
+    h+='</div>';
+
+    h+='<div class="sec"><div class="sec-h">Offset <span style="color:var(--dim2)">bone-space x · z</span></div>';
+    h+='<div class="row"><span class="axlabel">x</span><input class="fld" id="wp-ox" value="'+f4s(w.offset[0])+'"><span class="axlabel">z</span><input class="fld" id="wp-oz" value="'+f4s(w.offset[1])+'"></div>';
+    h+='<div class="empty">Drag the weapon on the canvas to set offset.</div>';
+    h+='</div>';
+
+    h+='<div class="sec"><div class="sec-h">Transform</div>';
+    h+='<div class="row"><label>rotation</label><input type="range" id="wp-rot" min="-180" max="180" step="0.5" value="'+w.rotationDeg+'"><input class="fld num" id="wp-rotn" value="'+w.rotationDeg.toFixed(1)+'"></div>';
+    h+='<div class="row"><label>scale</label><input type="range" id="wp-scl" min="0.1" max="3" step="0.01" value="'+w.scale+'"><input class="fld num" id="wp-scln" value="'+w.scale.toFixed(2)+'"></div>';
+    h+='</div>';
+
+    h+='<div class="sec"><div class="sec-h">Grip anchor <span style="color:var(--dim2)" id="wp-gripval">'+w.grip[0].toFixed(2)+', '+w.grip[1].toFixed(2)+'</span></div>';
+    h+='<div class="grip"><div class="thumb" id="wp-thumb"><img src="'+esc(w.src)+'" id="wp-thumbimg" draggable="false"><div class="mk" id="wp-mk" style="left:'+(w.grip[0]*100)+'%;top:'+(w.grip[1]*100)+'%"></div></div><div class="hint">click on the image to set where the hand grips it</div></div>';
+    h+='</div>';
+
+    h+='<div class="sec"><div class="toolbtn"><button class="btn ghost" id="wp-deselect" style="flex:1">Deselect</button><button class="btn danger" id="wp-remove" style="flex:1">Remove weapon</button></div></div>';
+    h+='</div>';
+    insp.innerHTML=h;
+    wireWeaponInspector(w);
+  }
+
+  // ---------- inspector field builders ----------
+  function numRow(label,id,val,step){
+    return '<div class="row"><label>'+label+'</label><input class="fld" id="'+id+'" value="'+(typeof val==="number"?val.toFixed(4):val)+'"></div>';
+  }
+  function vec3Row(pfx,vec,ids){
+    return '<div class="row"><span class="axlabel">x</span><input class="fld" id="'+ids[0]+'" value="'+f4s(vec[0])+'"></div>'+
+           '<div class="row"><span class="axlabel">y</span><input class="fld" id="'+ids[1]+'" value="'+f4s(vec[1])+'"></div>'+
+           '<div class="row"><span class="axlabel">z</span><input class="fld" id="'+ids[2]+'" value="'+f4s(vec[2])+'"></div>';
+  }
+  function checkbox(id,label,on){
+    return '<button class="checkbox'+(on?' on':'')+'" id="'+id+'"><span class="bx"><svg viewBox="0 0 10 10"><path d="M1 5l3 3 5-6" stroke="#1a1206" stroke-width="1.6" fill="none"/></svg></span>'+label+'</button>';
+  }
+
+  // ---------- inspector wiring ----------
+  function onNum(id,fn){
+    var el=document.getElementById(id); if(!el) return;
+    el.addEventListener("input",function(){ var n=parseFloat(el.value); if(!isNaN(n)) fn(n); });
+  }
+  function wireDefaultInspector(){
+    onNum("sp-cx",function(n){ S.sprite.cx=n; renderCanvas(); });
+    onNum("sp-cz",function(n){ S.sprite.cz=n; renderCanvas(); });
+    onNum("sp-h",function(n){ S.sprite.height=n; renderCanvas(); });
+    var op=document.getElementById("sp-op"), opn=document.getElementById("sp-opn");
+    if(op){ op.addEventListener("input",function(){ S.sprite.opacity=parseFloat(op.value); opn.value=S.sprite.opacity.toFixed(2); renderCanvas(); }); }
+    if(opn){ opn.addEventListener("input",function(){ var n=clamp(parseFloat(opn.value)||0,0,1); S.sprite.opacity=n; op.value=n; renderCanvas(); }); }
+    var vis=document.getElementById("sp-vis");
+    if(vis){ vis.addEventListener("click",function(){ S.sprite.visible=!S.sprite.visible; vis.classList.toggle("on",S.sprite.visible); renderCanvas(); }); }
+    var clr=document.getElementById("sp-clear");
+    if(clr){ clr.addEventListener("click",function(){ S.sprite.src=null; renderCanvas(); renderInspector(); }); }
+    document.querySelectorAll("[data-selw]").forEach(function(el){
+      el.addEventListener("click",function(){ select("weapon",el.getAttribute("data-selw")); });
+    });
+  }
+  function wireBoneInspector(b){
+    function upd(){
+      var hx=parseFloat(val("bn-hx")), hy=parseFloat(val("bn-hy")), hz=parseFloat(val("bn-hz"));
+      var tx=parseFloat(val("bn-tx")), ty=parseFloat(val("bn-ty")), tz=parseFloat(val("bn-tz"));
+      var bone=boneByName(b.name); if(!bone) return;
+      if(!isNaN(hx)&&!isNaN(hy)&&!isNaN(hz)){
+        bone.head=[hx,hy,hz];
+        if(bone.parent){ var p=boneByName(bone.parent); if(p) p.tail=[hx,hy,hz]; }
+      }
+      if(!isNaN(tx)&&!isNaN(ty)&&!isNaN(tz)) bone.tail=[tx,ty,tz];
+      renderCanvas();
+    }
+    ["bn-hx","bn-hy","bn-hz","bn-tx","bn-ty","bn-tz"].forEach(function(id){
+      var el=document.getElementById(id); if(el) el.addEventListener("input",upd);
+    });
+  }
+  function val(id){ var el=document.getElementById(id); return el?el.value:""; }
+
+  function wireWeaponInspector(w){
+    var bs=document.getElementById("wp-bone");
+    if(bs) bs.addEventListener("change",function(){ w.bone=bs.value; renderCanvas(); renderInspector(); });
+
+    onNum("wp-ox",function(n){ w.offset[0]=n; renderCanvas(); refreshAttach(w); });
+    onNum("wp-oz",function(n){ w.offset[1]=n; renderCanvas(); refreshAttach(w); });
+
+    var rot=document.getElementById("wp-rot"), rotn=document.getElementById("wp-rotn");
+    if(rot) rot.addEventListener("input",function(){ w.rotationDeg=parseFloat(rot.value); rotn.value=w.rotationDeg.toFixed(1); renderCanvas(); });
+    if(rotn) rotn.addEventListener("input",function(){ var n=parseFloat(rotn.value); if(!isNaN(n)){ w.rotationDeg=n; rot.value=n; renderCanvas(); } });
+
+    var scl=document.getElementById("wp-scl"), scln=document.getElementById("wp-scln");
+    if(scl) scl.addEventListener("input",function(){ w.scale=parseFloat(scl.value); scln.value=w.scale.toFixed(2); renderCanvas(); });
+    if(scln) scln.addEventListener("input",function(){ var n=parseFloat(scln.value); if(!isNaN(n)&&n>0){ w.scale=n; scl.value=n; renderCanvas(); } });
+
+    var thumb=document.getElementById("wp-thumb");
+    if(thumb){
+      thumb.addEventListener("click",function(e){
+        var rc=thumb.getBoundingClientRect();
+        var u=clamp((e.clientX-rc.left)/rc.width,0,1);
+        var vv=clamp((e.clientY-rc.top)/rc.height,0,1);
+        w.grip=[round(u),round(vv)];
+        var mk=document.getElementById("wp-mk"); mk.style.left=(u*100)+"%"; mk.style.top=(vv*100)+"%";
+        var gv=document.getElementById("wp-gripval"); if(gv) gv.textContent=w.grip[0].toFixed(2)+", "+w.grip[1].toFixed(2);
+        renderCanvas();
+      });
+    }
+    var ds=document.getElementById("wp-deselect");
+    if(ds) ds.addEventListener("click",function(){ select(null,null); });
+    var rm=document.getElementById("wp-remove");
+    if(rm) rm.addEventListener("click",function(){ removeWeapon(w.id); });
+  }
+  function refreshAttach(w){
+    var el=document.getElementById("wp-attach"); if(!el) return;
+    var ap=attachPoint(w);
+    el.textContent = ap?('('+f4s(ap[0])+',  '+f4s(ap[1])+',  '+f4s(ap[2])+')'):'—';
+  }
+
+  // ---------- mutations ----------
+  function removeWeapon(id){
+    S.weapons=S.weapons.filter(function(w){return w.id!==id;});
+    if(S.sel.id===id) S.sel={kind:null,id:null};
+    renderCanvas(); renderInspector();
+  }
+  function addWeapon(asset,src,aspect){
+    var bone=null;
+    if(S.sel.kind==="bone") bone=S.sel.id;
+    if(!bone && S.skeleton){
+      var hit=S.skeleton.bones.find(function(b){return /hand|wrist|bone_9$/.test(b.name);});
+      bone = hit?hit.name:(S.skeleton.bones[0]&&S.skeleton.bones[0].name);
+    }
+    if(!bone) bone="bone_0";
+    var id="w"+(++WID);
+    S.weapons.push({ id:id, asset:asset, src:src, aspect:aspect, bone:bone, offset:[0,0], grip:[0.5,0.6], rotationDeg:0, scale:1.2 });
+    S.sel={kind:"weapon",id:id};
+    renderCanvas(); renderInspector();
+  }
+  function loadSkeleton(sk){
+    S.skeleton=sk;
+    S.sel={kind:null,id:null};
+    S.view=fitView({x:sk.bbox.x, z:sk.bbox.z});
+    S.sprite.cx=(sk.bbox.x[0]+sk.bbox.x[1])/2;
+    S.sprite.cz=(sk.bbox.z[0]+sk.bbox.z[1])/2;
+    S.sprite.height=(sk.bbox.z[1]-sk.bbox.z[0])*1.18;
+    renderCanvas(); renderInspector();
+  }
+  function validateSkeleton(o){
+    if(!o||typeof o!=="object") throw new Error("not an object");
+    if(!Array.isArray(o.bones)||!o.bones.length) throw new Error("missing bones[]");
+    if(!o.bbox||!o.bbox.x||!o.bbox.z) throw new Error("missing bbox");
+    o.bones.forEach(function(b,i){ if(!b.head||!b.tail||b.head.length<3||b.tail.length<3) throw new Error("bone "+i+" bad head/tail"); });
+    return o;
+  }
+
+  // ---------- pan / zoom / drag ----------
+  svg.addEventListener("pointerdown", function(e){
+    if(e.button!==0) return; // left button only; right-click is reserved for the command palette
+    // background = pan + deselect
+    select(null,null);
+    dragState={kind:"pan", startClient:[e.clientX,e.clientY], startView:{x:S.view.x,y:S.view.y,w:S.view.w,h:S.view.h}};
+    svg.classList.add("panning");
+  });
+  svg.addEventListener("wheel", function(e){
+    e.preventDefault();
+    var p=clientToSvg(e.clientX,e.clientY);
+    var f = e.deltaY>0 ? 1.12 : 1/1.12;
+    var nw=S.view.w*f, nh=S.view.h*f;
+    S.view={ x:p[0]-(p[0]-S.view.x)*(nw/S.view.w), y:p[1]-(p[1]-S.view.y)*(nh/S.view.h), w:nw, h:nh };
+    renderCanvas();
+  }, {passive:false});
+
+  var rafPending=false;
+  function scheduleCanvas(){ if(rafPending)return; rafPending=true; requestAnimationFrame(function(){ rafPending=false; renderCanvas(); }); }
+
+  window.addEventListener("pointermove", function(e){
+    // tracking crosshair + axis readouts
+    updateCrosshair(e.clientX, e.clientY);
+    var d=dragState; if(!d) return;
+    if(d.kind==="pan"){
+      var rect=svg.getBoundingClientRect();
+      var per=d.startView.w/rect.width;
+      S.view={ x:d.startView.x-(e.clientX-d.startClient[0])*per, y:d.startView.y-(e.clientY-d.startClient[1])*per, w:d.startView.w, h:d.startView.h };
+      scheduleCanvas(); return;
+    }
+    var cb=cursorBone(e.clientX,e.clientY);
+    if(d.kind==="bone"){
+      var dx=cb[0]-d.start[0], dz=cb[1]-d.start[1];
+      var bone=boneByName(d.id); if(!bone) return;
+      var nx=d.val[0]+dx, nz=d.val[1]+dz;
+      bone.head=[nx,bone.head[1],nz];
+      if(bone.parent){ var p=boneByName(bone.parent); if(p) p.tail=[nx,bone.head[1],nz]; }
+      showFloat(e, f4s(nx)+", "+f4s(nz));
+      scheduleCanvas(); syncBoneFields(bone);
+    }else if(d.kind==="weapon"){
+      var dxw=cb[0]-d.start[0], dzw=cb[1]-d.start[1];
+      var w=S.weapons.find(function(x){return x.id===d.id;}); if(!w) return;
+      w.offset=[round(d.val[0]+dxw), round(d.val[1]+dzw)];
+      showFloat(e, "offset "+f4s(w.offset[0])+", "+f4s(w.offset[1]));
+      scheduleCanvas(); syncWeaponOffset(w);
+    }else if(d.kind==="rotate"){
+      var wr=S.weapons.find(function(x){return x.id===d.id;}); if(!wr) return;
+      var b=boneByName(wr.bone); var gx=toSvgX(b.head[0]+wr.offset[0]), gy=toSvgY(b.head[2]+wr.offset[1]);
+      var sp=clientToSvg(e.clientX,e.clientY);
+      var ang=Math.atan2(sp[1]-gy, sp[0]-gx)*180/Math.PI + 90;
+      while(ang>180)ang-=360; while(ang<-180)ang+=360;
+      wr.rotationDeg=round(ang);
+      showFloat(e, wr.rotationDeg.toFixed(1)+"°");
+      scheduleCanvas(); syncWeaponTransform(wr);
+    }else if(d.kind==="scale"){
+      var ws=S.weapons.find(function(x){return x.id===d.id;}); if(!ws) return;
+      var bb=boneByName(ws.bone); var gx2=bb.head[0]+ws.offset[0], gz2=bb.head[2]+ws.offset[1];
+      var dist=Math.hypot(cb[0]-gx2, cb[1]-gz2);
+      ws.scale=clamp(round(d.val*dist/d.start),0.05,5);
+      showFloat(e, "scale "+ws.scale.toFixed(2));
+      scheduleCanvas(); syncWeaponTransform(ws);
+    }
+  });
+  window.addEventListener("pointerup", function(){
+    if(dragState && (dragState.kind==="bone")) renderInspector();
+    dragState=null; svg.classList.remove("panning"); hideFloat();
+  });
+
+  function syncBoneFields(b){
+    setVal("bn-hx",f4s(b.head[0])); setVal("bn-hy",f4s(b.head[1])); setVal("bn-hz",f4s(b.head[2]));
+    setVal("bn-tx",f4s(b.tail[0])); setVal("bn-ty",f4s(b.tail[1])); setVal("bn-tz",f4s(b.tail[2]));
+  }
+  function syncWeaponOffset(w){ setVal("wp-ox",f4s(w.offset[0])); setVal("wp-oz",f4s(w.offset[1])); refreshAttach(w); }
+  function syncWeaponTransform(w){
+    var rot=document.getElementById("wp-rot"), rotn=document.getElementById("wp-rotn");
+    if(rot){ rot.value=w.rotationDeg; rotn.value=w.rotationDeg.toFixed(1); }
+    var scl=document.getElementById("wp-scl"), scln=document.getElementById("wp-scln");
+    if(scl){ scl.value=w.scale; scln.value=w.scale.toFixed(2); }
+  }
+  function setVal(id,v){ var el=document.getElementById(id); if(el && document.activeElement!==el) el.value=v; }
+
+  function showFloat(e,text){
+    var rc=stage.getBoundingClientRect();
+    floatlabel.style.display="block";
+    floatlabel.style.left=(e.clientX-rc.left)+"px";
+    floatlabel.style.top=(e.clientY-rc.top)+"px";
+    floatlabel.textContent=text;
+  }
+  function hideFloat(){ floatlabel.style.display="none"; }
+
+  // ---------- file loading ----------
+  function loadImage(src){
+    return new Promise(function(res,rej){
+      var im=new Image();
+      im.onload=function(){ res({src:src, aspect:im.naturalWidth/im.naturalHeight}); };
+      im.onerror=rej; im.src=src;
+    });
+  }
+  function fileToDataURL(file){
+    return new Promise(function(res,rej){
+      var fr=new FileReader();
+      fr.onload=function(){ res(fr.result); };
+      fr.onerror=rej; fr.readAsDataURL(file);
+    });
+  }
+
+  // ---------- export ----------
+  function download(name,text){
+    var blob=new Blob([text],{type:"application/json"});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement("a"); a.href=url; a.download=name; document.body.appendChild(a); a.click();
+    document.body.removeChild(a); setTimeout(function(){URL.revokeObjectURL(url);},500);
+  }
+  function exportPlacement(){
+    if(!S.skeleton){ toast("Load a skeleton first"); return; }
+    var obj={
+      skeleton:S.skeleton.name||null,
+      facing:S.skeleton.facing||"-Y",
+      sprite:S.sprite.src?{ cx:round(S.sprite.cx), cz:round(S.sprite.cz), height:round(S.sprite.height) }:null,
+      weapons:S.weapons.map(function(w){
+        return {
+          asset:w.asset, bone:w.bone,
+          offset:[round(w.offset[0]),round(w.offset[1])],
+          gripAnchor:[round(w.grip[0]),round(w.grip[1])],
+          rotationDeg:round(w.rotationDeg),
+          scale:round(w.scale),
+          attachPoint:attachPoint(w)
+        };
+      })
+    };
+    download("sprite-motion.placement.json", JSON.stringify(obj,null,2));
+    toast("Exported placement JSON");
+  }
+  function exportSkeleton(){
+    if(!S.skeleton){ toast("Load a skeleton first"); return; }
+    var sk=S.skeleton;
+    var obj={ name:sk.name, facing:sk.facing, bbox:sk.bbox,
+      bones:sk.bones.map(function(b){ return { name:b.name, parent:b.parent,
+        head:b.head.map(round), tail:b.tail.map(round), deform:b.deform }; }) };
+    download((sk.name||"skeleton")+".skeleton.json", JSON.stringify(obj,null,2));
+    toast("Exported skeleton JSON");
+  }
+
+  // ---------- toast ----------
+  var toastEl=document.getElementById("toast"), toastT;
+  function toast(msg){ toastEl.textContent=msg; toastEl.classList.add("show"); clearTimeout(toastT); toastT=setTimeout(function(){toastEl.classList.remove("show");},1800); }
+
+  // ---------- toggles ----------
+  document.getElementById("toggles").addEventListener("click",function(e){
+    var t=e.target.closest("[data-tg]"); if(!t) return;
+    var k=t.getAttribute("data-tg"); S.show[k]=!S.show[k];
+    t.classList.toggle("on",S.show[k]); renderCanvas();
+  });
+
+  // ---------- toolbar buttons ----------
+  function getSampleSkeleton(){ return JSON.parse(document.getElementById("sample-skeleton").textContent); }
+
+  document.getElementById("btnSample").addEventListener("click",function(){
+    loadSkeleton(getSampleSkeleton());
+    // also bring in sample sprite + halberd for an immediate full demo
+    loadImage(SAMPLE_SPRITE).then(function(r){ S.sprite.src=r.src; S.sprite.aspect=r.aspect; S.sprite.visible=true; renderCanvas(); renderInspector(); }).catch(function(){});
+    loadImage(SAMPLE_WEAPON).then(function(r){ addWeapon("halberd", r.src, r.aspect); }).catch(function(){});
+    toast("Loaded blackguard sample");
+  });
+
+  document.getElementById("btnLoadSkel").addEventListener("click",function(){ document.getElementById("fileSkel").click(); });
+  document.getElementById("fileSkel").addEventListener("change",function(e){
+    var f=e.target.files[0]; if(!f) return;
+    var fr=new FileReader();
+    fr.onload=function(){ try{ loadSkeleton(validateSkeleton(JSON.parse(fr.result))); toast("Loaded "+f.name); }catch(err){ toast("Invalid JSON: "+err.message); } };
+    fr.readAsText(f); e.target.value="";
+  });
+
+  document.getElementById("btnSprite").addEventListener("click",function(){ document.getElementById("fileSprite").click(); });
+  document.getElementById("fileSprite").addEventListener("change",function(e){
+    var f=e.target.files[0]; if(!f) return;
+    fileToDataURL(f).then(loadImage).then(function(r){
+      S.sprite.src=r.src; S.sprite.aspect=r.aspect; S.sprite.visible=true;
+      if(!S.skeleton){ S.sprite.cx=0; S.sprite.cz=0; }
+      renderCanvas(); renderInspector(); toast("Sprite placed");
+    });
+    e.target.value="";
+  });
+
+  document.getElementById("btnWeapon").addEventListener("click",function(){ document.getElementById("fileWeapon").click(); });
+  document.getElementById("fileWeapon").addEventListener("change",function(e){
+    var f=e.target.files[0]; if(!f) return;
+    var asset=f.name.replace(/\.[a-z]+$/i,"");
+    fileToDataURL(f).then(loadImage).then(function(r){ addWeapon(asset, r.src, r.aspect); toast("Weapon added"); });
+    e.target.value="";
+  });
+
+  document.getElementById("btnExport").addEventListener("click",exportPlacement);
+  document.getElementById("btnExportSkel").addEventListener("click",exportSkeleton);
+
+  // ---------- paste modal ----------
+  var pm=document.getElementById("pasteModal");
+  function openPaste(){ pm.classList.add("open"); document.getElementById("pasteErr").textContent=""; document.getElementById("pasteArea").focus(); }
+  function closePaste(){ pm.classList.remove("open"); }
+  document.getElementById("btnPaste").addEventListener("click",openPaste);
+  document.getElementById("pasteClose").addEventListener("click",closePaste);
+  document.getElementById("pasteCancel").addEventListener("click",closePaste);
+  document.getElementById("pasteLoad").addEventListener("click",function(){
+    try{ var o=validateSkeleton(JSON.parse(document.getElementById("pasteArea").value)); loadSkeleton(o); closePaste(); toast("Loaded pasted skeleton"); }
+    catch(err){ document.getElementById("pasteErr").textContent=err.message; }
+  });
+  pm.addEventListener("click",function(e){ if(e.target===pm) closePaste(); });
+
+  stage.addEventListener("pointerleave", function(){ hideCrosshair(); readoutX.textContent="—"; readoutZ.textContent="—"; });
+
+  // ---------- resize ----------
+  window.addEventListener("resize", renderCanvas);
+
+  // ---------- init ----------
+  renderCanvas();
+  renderInspector();
+
+  // ---------- command palette (double right-click, or Ctrl/Cmd+K) ----------
+  (function(){
+    var css=`
+.cmdp{position:fixed;inset:0;z-index:9999;display:none;background:rgba(8,8,11,.5);backdrop-filter:blur(2px);}
+.cmdp.open{display:block;}
+.cmdp-box{position:absolute;top:11%;left:50%;transform:translateX(-50%);width:min(560px,92vw);background:#1d1d23;border:1px solid #34343e;border-radius:10px;box-shadow:0 24px 70px rgba(0,0,0,.6);overflow:hidden;font-family:var(--mono,ui-monospace,Menlo,Consolas,monospace);}
+.cmdp-in{width:100%;box-sizing:border-box;background:#16161b;color:#e8e8ee;border:0;border-bottom:1px solid #2c2c34;padding:14px 16px;font-size:14px;font-family:inherit;outline:none;}
+.cmdp-in::placeholder{color:#6a6a78;}
+.cmdp-list{max-height:46vh;overflow:auto;padding:6px;}
+.cmdp-it{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:6px;color:#c7c7d2;font-size:13px;cursor:pointer;white-space:nowrap;}
+.cmdp-it .cmdp-g{margin-left:auto;font-size:10.5px;color:#6f6f7d;text-transform:uppercase;letter-spacing:.04em;}
+.cmdp-it.on{background:#2a2a33;color:#fff;box-shadow:inset 2px 0 0 var(--amber,#f0a830);}
+.cmdp-empty{padding:14px;color:#6a6a78;font-size:12.5px;}
+.cmdp-ft{display:flex;justify-content:space-between;padding:8px 14px;border-top:1px solid #2c2c34;color:#6a6a78;font-size:11px;}
+.cmdp-ft b{color:var(--amber,#f0a830);font-weight:400;opacity:.85;}
+`;
+    var st=document.createElement("style"); st.textContent=css; document.head.appendChild(st);
+    var ov=document.createElement("div"); ov.className="cmdp";
+    ov.innerHTML='<div class="cmdp-box"><input class="cmdp-in" placeholder="Type a command…   double-right-click or Ctrl/Cmd+K" spellcheck="false"><div class="cmdp-list"></div><div class="cmdp-ft"><span>↑↓ navigate · ↵ run · esc close</span><b>sprite-motion</b></div></div>';
+    document.body.appendChild(ov);
+    var input=ov.querySelector(".cmdp-in"), list=ov.querySelector(".cmdp-list");
+    var byId=function(id){ return document.getElementById(id); };
+    var tgOn=function(n){ var b=document.querySelector('[data-tg="'+n+'"]'); return b&&b.classList.contains("on"); };
+    var tg=function(n){ var b=document.querySelector('[data-tg="'+n+'"]'); if(b) b.click(); };
+
+    function commands(){
+      var c=[
+        {l:"Load blackguard sample", run:function(){ loadSkeleton(getSampleSkeleton()); toast("Loaded blackguard sample"); }},
+        {l:"Load skeleton from file…", run:function(){ byId("btnLoadSkel").click(); }},
+        {l:"Paste skeleton JSON…", run:function(){ openPaste(); }},
+        {l:"Upload sprite…", run:function(){ byId("btnSprite").click(); }},
+        {l:"Add weapon / prop…", run:function(){ byId("btnWeapon").click(); }},
+        {l:"Export placement JSON", run:function(){ exportPlacement(); }},
+        {l:"Export skeleton JSON", run:function(){ exportSkeleton(); }},
+        {l:"Fit view to skeleton", run:function(){ if(!S.skeleton){ toast("Load a skeleton first"); return; } S.view=fitView({x:S.skeleton.bbox.x,z:S.skeleton.bbox.z}); renderCanvas(); renderRulers(); }},
+        {l:"Toggle grid ("+(tgOn("grid")?"on":"off")+")", run:function(){ tg("grid"); }},
+        {l:"Toggle labels ("+(tgOn("labels")?"on":"off")+")", run:function(){ tg("labels"); }},
+        {l:"Toggle sprite ("+(tgOn("sprite")?"on":"off")+")", run:function(){ tg("sprite"); }},
+        {l:"Toggle bones ("+(tgOn("bones")?"on":"off")+")", run:function(){ tg("bones"); }},
+        {l:"Deselect", run:function(){ select(null,null); }}
+      ];
+      var sw=selWeapon();
+      if(sw) c.push({l:"Remove selected weapon ("+sw.asset+")", run:function(){ removeWeapon(sw.id); }});
+      (S.weapons||[]).forEach(function(wp){ c.push({l:"Select weapon: "+wp.asset+"  ["+wp.bone+"]", g:"weapon", run:function(){ select("weapon",wp.id); }}); });
+      if(S.skeleton) S.skeleton.bones.forEach(function(b){ c.push({l:"Select bone: "+b.name, g:"bone", run:function(){ select("bone",b.name); }}); });
+      return c;
+    }
+
+    var ALL=[], cur=[], active=0;
+    function refresh(){
+      var q=input.value.trim().toLowerCase();
+      cur = !q ? ALL.slice() : ALL.filter(function(c){ return c.l.toLowerCase().indexOf(q)>=0; });
+      if(active>=cur.length) active=Math.max(0,cur.length-1);
+      list.innerHTML = cur.length
+        ? cur.map(function(c,i){ return '<div class="cmdp-it'+(i===active?" on":"")+'" data-i="'+i+'">'+esc(c.l)+(c.g?'<span class="cmdp-g">'+c.g+'</span>':"")+'</div>'; }).join("")
+        : '<div class="cmdp-empty">no matching command</div>';
+      var on=list.querySelector(".cmdp-it.on"); if(on) on.scrollIntoView({block:"nearest"});
+    }
+    function isOpen(){ return ov.classList.contains("open"); }
+    function openP(){ ALL=commands(); active=0; input.value=""; ov.classList.add("open"); refresh(); input.focus(); }
+    function closeP(){ ov.classList.remove("open"); }
+    function toggleP(){ isOpen()?closeP():openP(); }
+    function run(i){ var c=cur[i]; if(!c) return; closeP(); try{ c.run(); }catch(err){ toast("Command failed"); } }
+
+    input.addEventListener("input", function(){ active=0; refresh(); });
+    input.addEventListener("keydown", function(e){
+      if(e.key==="ArrowDown"){ e.preventDefault(); active=Math.min(cur.length-1,active+1); refresh(); }
+      else if(e.key==="ArrowUp"){ e.preventDefault(); active=Math.max(0,active-1); refresh(); }
+      else if(e.key==="Enter"){ e.preventDefault(); run(active); }
+      else if(e.key==="Escape"){ e.preventDefault(); closeP(); }
+    });
+    list.addEventListener("click", function(e){ var it=e.target.closest(".cmdp-it"); if(it) run(+it.getAttribute("data-i")); });
+    list.addEventListener("mousemove", function(e){ var it=e.target.closest(".cmdp-it"); if(it){ var i=+it.getAttribute("data-i"); if(i!==active){ active=i; refresh(); } } });
+    ov.addEventListener("mousedown", function(e){ if(e.target===ov) closeP(); });
+
+    var lastCtx=0;
+    window.addEventListener("contextmenu", function(e){
+      var now=Date.now(), dbl=(now-lastCtx)<450; lastCtx=dbl?0:now;
+      var tag=(e.target.tagName||"").toLowerCase(), editable=(tag==="input"||tag==="textarea");
+      if(dbl){ e.preventDefault(); toggleP(); return; }
+      if(!editable) e.preventDefault();   // suppress native menu app-wide; single right-click still works in text fields
+    }, true);
+    window.addEventListener("keydown", function(e){
+      if((e.ctrlKey||e.metaKey) && (e.key==="k"||e.key==="K")){ e.preventDefault(); toggleP(); }
+    }, true);
+  })();
+})();
+</script>
+</body>
+</html>
