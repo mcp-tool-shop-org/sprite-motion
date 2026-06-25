@@ -95,6 +95,7 @@ The editor is the **placement authority**; the headless Blender step is the **ap
 | [`pipeline/placement.example.json`](pipeline/placement.example.json) | Example single-character export (`--placement` for one char + `--char`). |
 | [`pipeline/placements.example.json`](pipeline/placements.example.json) | Example roster export ("Export all placements"). |
 | [`pipeline/manifest.example.json`](pipeline/manifest.example.json) | Template: skeleton names + weapon assets → rigged GLBs, for the roster run. |
+| [`pipeline/build_manifest.py`](pipeline/build_manifest.py) | Auto-generate the roster manifest from a folder of rigged GLBs + a folder of weapon GLBs (no Blender). `--check` a placements file to catch naming gaps before the batch. |
 | [`docs/claude-design-prompt.md`](docs/claude-design-prompt.md) | v1 build spec — paste into Claude Design, attach the three sample files, build the editor as standalone HTML. |
 | [`docs/claude-design-prompt-v2.md`](docs/claude-design-prompt-v2.md) | v2 build spec (expand the editor) — multi-character + bulk, reusable weapon/prop library, project save/load. Attach `app/sprite-motion.slim.html` and extend. |
 | [`docs/claude-design-prompt-v3.md`](docs/claude-design-prompt-v3.md) | v3 build spec (precision) — snapping, depth/Y + 2.5D preview, weapon presets, weapon-tip anchor. KB-grounded (rigging 2.5D camera + weapon_tip; combat-craft silhouette). |
@@ -106,6 +107,18 @@ The editor is the **placement authority**; the headless Blender step is the **ap
 ## Using it
 
 Open [`app/sprite-motion.html`](app/sprite-motion.html) in a browser → **Load blackguard sample** → upload the sprite + halberd from `public/samples/` → drag the weapon onto the hand bone → **Export placement JSON**. Double-right-click anywhere (or `Ctrl/⌘K`) for the command palette — type `bone_9` to jump straight to the hand joint, toggle layers, fit the view, export, etc.
+
+## Batch the whole roster
+
+Once the rigged GLBs exist, place weapons across all characters in the editor, **Export all placements**, then:
+```bash
+# 1. auto-build the manifest from your folders (and validate it against the export)
+python pipeline/build_manifest.py --chars rigged/ --weapons weapons/ \
+    --out manifest.json --check placements.json
+# 2. rig every character at its exact attachPoints in one run
+blender -b --python pipeline/apply_placement.py -- \
+    --placement placements.json --manifest manifest.json --outdir out/
+```
 
 ## How the editor is built (Claude Design loop)
 
