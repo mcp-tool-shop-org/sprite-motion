@@ -132,6 +132,36 @@ def place_v4(w, arm, assets):
     bpy.ops.object.parent_set(type='BONE', keep_transform=True)         # keep_transform -> Blender computes the bone-local offset; no bone-axis math
     print(f"[placed v4] {asset} -> {bone}  scale={s}  grip={[round(x,4) for x in gripw]} tip={[round(x,4) for x in tipw]}", flush=True)
 
+def _bone_depth(arm, name):
+    d = 0; b = arm.data.bones.get(name)
+    while b is not None and b.parent is not None: b = b.parent; d += 1
+    return d
+
+def apply_pose(arm, pose):
+    """Pose the armature from the editor's baked per-bone root-relative world transforms
+    (poseForChar -> world.{p,q}, three.js Y-up). World transforms port across the three.js/Blender
+    bone-axis difference (Y-up -> Z-up via C); local delta-quats do NOT. Set each pose bone parent-first,
+    then bake the pose as the new REST (armature_apply) so the glTF export captures it and the weapon-grip
+    chain is built against the posed configuration (edit mode shows rest, so rest must already BE the pose)."""
+    if not pose: return
+    bd = pose.get("bones", {})
+    posed = [n for n in bd if n in arm.pose.bones and bd[n].get("world")]
+    if not posed: return
+    posed.sort(key=lambda n: _bone_depth(arm, n))                          # parent-first: children inherit posed parents
+    bpy.ops.object.select_all(action='DESELECT'); arm.select_set(True); bpy.context.view_layer.objects.active = arm
+    bpy.ops.object.mode_set(mode='POSE')
+    Minv = arm.matrix_world.inverted()
+    for name in posed:
+        wd = bd[name]["world"]; q = wd["q"]
+        quat = mathutils.Quaternion((q[3], q[0], q[1], q[2]))              # three.js [x,y,z,w] -> mathutils (w,x,y,z)
+        M_root = mathutils.Matrix.Translation(V(wd["p"])) @ quat.to_matrix().to_4x4()
+        arm.pose.bones[name].matrix = Minv @ (C @ M_root @ C.inverted())  # absolute posed transform, Blender space
+        bpy.context.view_layer.update()
+    try: bpy.ops.pose.armature_apply()                                    # bake pose -> rest
+    except Exception as e: print(f"[pose] armature_apply warn: {e}", flush=True)
+    bpy.ops.object.mode_set(mode='OBJECT')
+    print(f"[posed] {len(posed)} bone(s) baked to rest", flush=True)
+
 def rig_character(char_glb, block, assets, out):
     bpy.ops.wm.read_factory_settings(use_empty=True)
     bpy.ops.import_scene.gltf(filepath=char_glb)
@@ -143,7 +173,8 @@ def rig_character(char_glb, block, assets, out):
             if o is not keep: bpy.data.objects.remove(o, do_unlink=True)
     charmesh = max([m for m in bpy.context.scene.objects if m.type == "MESH"], key=lambda m: len(m.data.vertices))
     zs = [(charmesh.matrix_world @ v.co).z for v in charmesh.data.vertices]; figureH = max(zs) - min(zs)
-    print(f"[char] {os.path.basename(char_glb)}  figureH={figureH:.3f}  weapons={len(block.get('weapons', []))}", flush=True)
+    print(f"[char] {os.path.basename(char_glb)}  figureH={figureH:.3f}  weapons={len(block.get('weapons', []))}  pose={'yes' if block.get('pose',{}).get('bones') else 'no'}", flush=True)
+    apply_pose(arm, block.get("pose"))                                     # pose + bake-as-rest BEFORE weapons (they attach to the posed hand)
     for w in block.get("weapons", []):
         place_v4(w, arm, assets) if "rootTransform" in w else place(w, arm, figureH, assets)
     for o in [m for m in list(bpy.context.scene.objects) if m.type == "MESH" and len(m.data.vertices) < 300]:
