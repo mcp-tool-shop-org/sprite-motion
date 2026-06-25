@@ -4,7 +4,7 @@
 
 sprite-motion exists to **eliminate coordinate guessing** in the studio's 3D character-rigging pipeline. An auto-rigger gives us a character skeleton as raw 3D numbers; we then need to attach weapons (a halberd, an axe, a staff) to the right bone at the right spot. Doing that by eyeballing pixel positions in a headless renderer is slow and error-prone — it was the wall the pipeline kept hitting. This tool puts the placement in a browser where **the canvas grid *is* the rig's real coordinate space**, so you drag a weapon onto the hand, read the exact numbers, and export placement data the Blender rig step applies verbatim.
 
-> Status: **build prompt + sample data ready.** The editor itself is built with **Claude Design** (self-contained interactive HTML) from [`docs/claude-design-prompt.md`](docs/claude-design-prompt.md), then wired to the Blender pipeline here in Claude Code. A partial React exploration lives in `src/` as reference for the coordinate math (not the canonical build — see *Repository layout*).
+> Status: **editor v1 is in the repo** — [`app/sprite-motion.html`](app/sprite-motion.html), a self-contained offline build (made with **Claude Design** from [`docs/claude-design-prompt.md`](docs/claude-design-prompt.md)): load a skeleton, register the reference sprite, place weapons/props, jump to any bone via the **command palette** (double right-click or `Ctrl/⌘K`), and export placement JSON. **Next:** the Blender bridge that consumes the exported placement and attaches the weapon GLB at the exact `attachPoint`. A partial React exploration in `src/` is kept as reference for the coordinate math.
 
 ---
 
@@ -88,17 +88,22 @@ The editor is the **placement authority**; the headless Blender step is the **ap
 
 | Path | What |
 |------|------|
+| [`app/sprite-motion.html`](app/sprite-motion.html) | **The editor** — self-contained offline HTML. Open it in any browser; double-right-click (or `Ctrl/⌘K`) for the command palette. |
 | [`docs/claude-design-prompt.md`](docs/claude-design-prompt.md) | The full build spec — paste into Claude Design, attach the three sample files, build the editor as standalone HTML. |
 | `public/samples/blackguard.skeleton.json` | Real 40-bone skeleton (the embedded sample). |
 | `public/samples/blackguard.front.png` | Body sprite for the reference layer. |
 | `public/samples/halberd.png` | Transparent halberd prop. |
 | `src/` | **Reference only** — an early React/SVG exploration that captures the bone-space projection (`src/lib/projection.ts`), the data types (`src/types.ts`), the store, and a draggable canvas. The canonical editor is the Claude Design HTML; this documents the math/interactions. |
 
-## How the editor is built
+## Using it
+
+Open [`app/sprite-motion.html`](app/sprite-motion.html) in a browser → **Load blackguard sample** → upload the sprite + halberd from `public/samples/` → drag the weapon onto the hand bone → **Export placement JSON**. Double-right-click anywhere (or `Ctrl/⌘K`) for the command palette — type `bone_9` to jump straight to the hand joint, toggle layers, fit the view, export, etc.
+
+## How the editor is built (Claude Design loop)
 
 1. Open a new project at **claude.ai/design**, attach the three `public/samples/*` files, paste [`docs/claude-design-prompt.md`](docs/claude-design-prompt.md).
 2. Iterate, then **Save as standalone HTML**.
-3. Bring the HTML back here; wire `placement.json` into the Blender weapon-attach step and verify the weapon lands exactly where the editor placed it.
+3. Bring it back here: surgical features (e.g. the command palette) are added in Claude Code, and `placement.json` is wired into the Blender weapon-attach step so the weapon lands exactly where the editor placed it.
 
 ## License
 
