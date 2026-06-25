@@ -1,5 +1,5 @@
 """sprite-motion BRIDGE — apply editor placement(s) to rigged character GLB(s).
-Each weapon is dropped at its exact attachPoint (+ in-plane rotation + scale), with a non-deform
+Each weapon is dropped at its exact attachPoint (+ orientation + scale), with a non-deform
 weapon_grip bone (child of the named bone) so it rides the hand. No coordinate guessing.
 
 SINGLE character ("Export JSON" from the editor):
@@ -13,6 +13,15 @@ WHOLE ROSTER ("Export all placements"):
     manifest   = { "characters": { "<skeleton name>": "<rigged glb>", ... },
                    "weapons":    { "<asset>": "<weapon glb>", ... } }
   --weapons asset=glb,... augments/overrides the manifest's weapon map.
+
+PLACEMENT FORMATS (dispatched per-weapon):
+  v4 (3D editor) — weapon carries `rootTransform {position,quaternion,scale}` resolved to the CHARACTER
+    ROOT in three.js / glTF **Y-up** space, plus `attachPoint` (grip) and `tipPoint`, also character-root
+    Y-up. The bridge converts Y-up -> Blender **Z-up** (Rx+90), sets the weapon's world matrix DIRECTLY
+    (WYSIWYG — what the editor showed is what lands; no auto-orientation), then builds weapon_grip->weapon_tip.
+  v3 (legacy 2D editor) — weapon carries `offset` + `attachPoint` (Blender **Z-up**) + in-plane `rotationDeg`
+    + image-space `gripAnchor`/`tipAnchor`; the weapon is auto-oriented from its geometry. Still supported.
+  Dispatch key: presence of `rootTransform` -> v4, else v3.
 """
 import bpy, sys, os, json, math, mathutils, numpy as np
 argv = sys.argv[sys.argv.index("--")+1:]
@@ -21,14 +30,13 @@ PLACE = arg("--placement"); CHAR = arg("--char"); OUT = arg("--out")
 MANIFEST = arg("--manifest"); OUTDIR = arg("--outdir")
 ASSETS_CLI = dict(kv.split("=", 1) for kv in arg("--weapons", "").split(",") if "=" in kv)
 V = mathutils.Vector
+C = mathutils.Matrix.Rotation(math.radians(90), 4, 'X')   # glTF/three.js (Y-up) -> Blender (Z-up)
 P = json.load(open(PLACE, encoding="utf-8"))
 
 def co(o): return np.array([(v.co.x, v.co.y, v.co.z) for v in o.data.vertices])
 
-def place(w, arm, figureH, assets):
-    asset = w["asset"]; path = assets.get(asset); bone = w["bone"]
-    if not path or not os.path.exists(path): print(f"[skip] no GLB for '{asset}'", flush=True); return
-    if bone not in arm.data.bones: print(f"[skip] bone '{bone}' absent", flush=True); return
+def _import_weapon(asset, path):
+    """Import a weapon GLB, join to one mesh, drop empties, bake the import transform. Shared by v3 + v4."""
     before = set(bpy.context.scene.objects)
     bpy.ops.import_scene.gltf(filepath=path)
     new = [o for o in bpy.context.scene.objects if o not in before]
@@ -44,6 +52,28 @@ def place(w, arm, figureH, assets):
             except Exception: pass
     bpy.ops.object.select_all(action='DESELECT'); hal.select_set(True); bpy.context.view_layer.objects.active = hal
     bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+    return hal
+
+def _build_grip_chain(arm, bone, asset, gripw, tipw):
+    """weapon_grip (HEAD at the grip) -> weapon_tip (HEAD at the business end). glTF stores joint HEADS,
+    not tails, so the meaningful positions go in the heads (KB rigging: the tip joint feeds hit-box / tip-velocity).
+    gripw/tipw are world-space (Blender Z-up) points. Returns the grip bone name (for parenting)."""
+    Minv = arm.matrix_world.inverted()
+    grip_local = Minv @ gripw; tip_local = Minv @ tipw
+    d = tip_local - grip_local; L = d.length; d = d / L if L > 1e-5 else V((0, 0, 1))
+    bpy.context.view_layer.objects.active = arm; bpy.ops.object.mode_set(mode='EDIT')
+    eb = arm.data.edit_bones; hb = eb[bone]; gn = "weapon_grip_" + asset; tn = "weapon_tip_" + asset
+    g = eb.new(gn); g.head = grip_local; g.tail = grip_local + d * max(0.08, L * 0.3); g.parent = hb; g.use_deform = False; g.use_connect = False
+    t = eb.new(tn); t.head = tip_local; t.tail = tip_local + d * 0.05; t.parent = g; t.use_deform = False; t.use_connect = False
+    bpy.ops.object.mode_set(mode='OBJECT')
+    return gn
+
+def place(w, arm, figureH, assets):
+    """v3 (legacy): auto-orient the weapon from its geometry, then drop at attachPoint (Blender Z-up) + in-plane rotationDeg."""
+    asset = w["asset"]; path = assets.get(asset); bone = w["bone"]
+    if not path or not os.path.exists(path): print(f"[skip] no GLB for '{asset}'", flush=True); return
+    if bone not in arm.data.bones: print(f"[skip] bone '{bone}' absent", flush=True); return
+    hal = _import_weapon(asset, path)
     c = co(hal); ext = c.max(0) - c.min(0); la = int(np.argmax(ext))     # longest axis -> Z
     if la != 2:
         hal.rotation_euler = (0, math.radians(90), 0) if la == 0 else (math.radians(90), 0, 0)
@@ -66,9 +96,7 @@ def place(w, arm, figureH, assets):
     hal.rotation_euler = (0, math.radians(w.get("rotationDeg", 0)), 0)   # in-plane (about depth axis)
     hal.location = V((ap[0], ap[1], ap[2]))
     bpy.context.view_layer.update()
-    # weapon_grip (HEAD at the grip) -> weapon_tip (HEAD at the business end). glTF stores joint HEADS,
-    # not tails, so the meaningful positions go in the heads (KB rigging: the tip joint feeds hit-box / tip-velocity).
-    Minv = arm.matrix_world.inverted(); apw = V((ap[0], ap[1], ap[2]))
+    apw = V((ap[0], ap[1], ap[2]))
     MW = mathutils.Matrix.Translation(apw) @ mathutils.Euler((0, math.radians(w.get("rotationDeg", 0)), 0), 'XYZ').to_matrix().to_4x4()
     tA = w.get("tipAnchor")
     if tA:                                              # editor's explicit tip: image-v maps to haft height
@@ -77,17 +105,32 @@ def place(w, arm, figureH, assets):
         tipw = MW @ V((0.0, 0.0, tip_z))                # on the haft axis at the tip height (grip is at z=0 local)
     else:                                               # fallback: weapon's far end from the grip
         tipw = max((MW @ v.co for v in hal.data.vertices), key=lambda p: (p - apw).length)
-    grip_local = Minv @ apw; tip_local = Minv @ tipw
-    d = tip_local - grip_local; L = d.length; d = d / L if L > 1e-5 else V((0, 0, 1))
-    bpy.context.view_layer.objects.active = arm; bpy.ops.object.mode_set(mode='EDIT')
-    eb = arm.data.edit_bones; hb = eb[bone]; gn = "weapon_grip_" + asset; tn = "weapon_tip_" + asset
-    g = eb.new(gn); g.head = grip_local; g.tail = grip_local + d * max(0.08, L * 0.3); g.parent = hb; g.use_deform = False; g.use_connect = False
-    t = eb.new(tn); t.head = tip_local; t.tail = tip_local + d * 0.05; t.parent = g; t.use_deform = False; t.use_connect = False
-    bpy.ops.object.mode_set(mode='OBJECT')
+    gn = _build_grip_chain(arm, bone, asset, apw, tipw)
     bpy.ops.object.select_all(action='DESELECT'); hal.select_set(True); arm.select_set(True); bpy.context.view_layer.objects.active = arm
     arm.data.bones.active = arm.data.bones[gn]
     bpy.ops.object.parent_set(type='BONE', keep_transform=True)
-    print(f"[placed] {asset} -> {bone}  at {ap}  rot={w.get('rotationDeg',0)} scale={w.get('scale',1.0)}", flush=True)
+    print(f"[placed v3] {asset} -> {bone}  at {ap}  rot={w.get('rotationDeg',0)} scale={w.get('scale',1.0)}", flush=True)
+
+def place_v4(w, arm, assets):
+    """v4 (3D editor): explicit weapon transform (three.js Y-up, relative to the character root) -> WYSIWYG.
+    No auto-orientation; the editor already oriented the weapon. Convert Y-up -> Z-up via C (Rx+90)."""
+    asset = w["asset"]; path = assets.get(asset); bone = w["bone"]
+    if not path or not os.path.exists(path): print(f"[skip] no GLB for '{asset}'", flush=True); return
+    if bone not in arm.data.bones: print(f"[skip] bone '{bone}' absent", flush=True); return
+    hal = _import_weapon(asset, path)                                    # verts now baked to C @ v_local (Blender Z-up)
+    rt = w["rootTransform"]; q = rt["quaternion"]; s = float(rt.get("scale", 1.0))
+    quat = mathutils.Quaternion((q[3], q[0], q[1], q[2]))               # three.js [x,y,z,w] -> mathutils (w,x,y,z)
+    M_gltf = mathutils.Matrix.Translation(V(rt["position"])) @ quat.to_matrix().to_4x4() @ mathutils.Matrix.Scale(s, 4)
+    hal.matrix_world = C @ M_gltf @ C.inverted()                        # weapon world matrix, Blender space (conjugation)
+    bpy.context.view_layer.update()
+    grip = w.get("attachPoint"); tip = w.get("tipPoint")               # character-root Y-up points -> Blender via C
+    gripw = (C @ V(grip)) if grip else (hal.matrix_world @ V((0.0, 0.0, 0.0)))
+    tipw = (C @ V(tip)) if tip else max((hal.matrix_world @ v.co for v in hal.data.vertices), key=lambda p: (p - gripw).length)
+    gn = _build_grip_chain(arm, bone, asset, gripw, tipw)
+    bpy.ops.object.select_all(action='DESELECT'); hal.select_set(True); arm.select_set(True); bpy.context.view_layer.objects.active = arm
+    arm.data.bones.active = arm.data.bones[gn]
+    bpy.ops.object.parent_set(type='BONE', keep_transform=True)         # keep_transform -> Blender computes the bone-local offset; no bone-axis math
+    print(f"[placed v4] {asset} -> {bone}  scale={s}  grip={[round(x,4) for x in gripw]} tip={[round(x,4) for x in tipw]}", flush=True)
 
 def rig_character(char_glb, block, assets, out):
     bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -101,7 +144,8 @@ def rig_character(char_glb, block, assets, out):
     charmesh = max([m for m in bpy.context.scene.objects if m.type == "MESH"], key=lambda m: len(m.data.vertices))
     zs = [(charmesh.matrix_world @ v.co).z for v in charmesh.data.vertices]; figureH = max(zs) - min(zs)
     print(f"[char] {os.path.basename(char_glb)}  figureH={figureH:.3f}  weapons={len(block.get('weapons', []))}", flush=True)
-    for w in block.get("weapons", []): place(w, arm, figureH, assets)
+    for w in block.get("weapons", []):
+        place_v4(w, arm, assets) if "rootTransform" in w else place(w, arm, figureH, assets)
     for o in [m for m in list(bpy.context.scene.objects) if m.type == "MESH" and len(m.data.vertices) < 300]:
         bb = [o.matrix_world @ V(c) for c in o.bound_box]
         if max(max(p[i] for p in bb) - min(p[i] for p in bb) for i in range(3)) > 1.4: bpy.data.objects.remove(o, do_unlink=True)

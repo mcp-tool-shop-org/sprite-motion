@@ -1,0 +1,28 @@
+{
+  "_note": "v4 = the 3D-editor format. Coordinates are three.js / glTF Y-UP, resolved relative to the CHARACTER ROOT (character loads at the origin). rootTransform places the weapon mesh (WYSIWYG); attachPoint=grip head, tipPoint=tip head feed the weapon_grip->weapon_tip chain; boneLocal/gripLocal/tipLocal are for preset reuse + readability. The Blender bridge converts Y-up->Z-up itself. Numbers below are ILLUSTRATIVE; real ones come from the editor.",
+  "format": "sprite-motion.placement",
+  "version": 4,
+  "skeleton": "blackguard_dec_rigged",
+  "facing": "-Y",
+  "space": "gltf-y-up",
+  "weapons": [
+    {
+      "asset": "halberd",
+      "bone": "bone_9",
+      "rootTransform": {
+        "position": [0.247, 0.019, -0.009],
+        "quaternion": [0.0, 0.0, 0.0, 1.0],
+        "scale": 1.2
+      },
+      "attachPoint": [0.247, 0.019, -0.009],
+      "tipPoint": [0.247, 0.94, -0.009],
+      "boneLocal": {
+        "position": [0.018, 0.004, -0.010],
+        "quaternion": [0.0, 0.0, 0.0, 1.0],
+        "scale": 1.2
+      },
+      "gripLocal": [0.0, 0.0, 0.0],
+      "tipLocal": [0.0, 0.92, 0.0]
+    }
+  ]
+}

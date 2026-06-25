@@ -1,0 +1,1526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sprite-motion 3D</title>
+<style>
+  :root{
+    --bg:#0e0e11; --panel:#17171c; --panel2:#1f1f25; --panel3:#26262e;
+    --border:#2c2c34; --border2:#383842;
+    --text:#d6d8dd; --dim:#8a8a96; --dim2:#5a5a64;
+    --amber:#f0a830; --amber-dim:#7a5a1e; --cyan:#7fd4e6; --violet:#b98bf0; --good:#7fd49a;
+    --mono:'SF Mono',ui-monospace,'JetBrains Mono','Roboto Mono',Menlo,Consolas,monospace;
+    --sans:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;overflow:hidden}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:13px;-webkit-font-smoothing:antialiased;user-select:none}
+  #app{display:flex;flex-direction:column;height:100vh}
+
+  /* ---------- toolbar ---------- */
+  #toolbar{display:flex;align-items:center;gap:7px;padding:7px 10px;background:var(--panel);border-bottom:1px solid var(--border);flex-wrap:nowrap;overflow-x:auto;min-height:46px}
+  #toolbar::-webkit-scrollbar{height:0}
+  .brand{font-family:var(--mono);font-size:12.5px;letter-spacing:.3px;color:var(--text);white-space:nowrap;padding-right:4px}
+  .brand b{color:var(--amber)}
+  .tbsep{width:1px;height:22px;background:var(--border);flex:none;margin:0 2px}
+  .btn{height:28px;padding:0 11px;background:var(--panel2);border:1px solid var(--border);border-radius:5px;color:var(--text);
+    font-family:var(--sans);font-size:12px;cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;flex:none}
+  .btn:hover{background:var(--panel3);border-color:var(--border2)}
+  .btn.ghost{background:transparent}
+  .btn.amber{border-color:var(--amber-dim);color:var(--amber)}
+  .btn.amber:hover{background:rgba(240,168,48,.1)}
+  .btn .ic{font-size:13px;opacity:.85}
+  .seg{display:flex;background:var(--panel2);border:1px solid var(--border);border-radius:5px;padding:2px;gap:2px;flex:none}
+  .seg button{height:22px;min-width:30px;padding:0 9px;border:none;background:transparent;color:var(--dim);font-family:var(--mono);
+    font-size:11px;border-radius:3px;cursor:pointer}
+  .seg button.on{background:var(--panel3);color:var(--amber)}
+  .seg.dir button{min-width:26px;padding:0 6px}
+  .seg.dir button.on{color:var(--bg);background:var(--amber)}
+  .tog{height:28px;padding:0 10px;background:var(--panel2);border:1px solid var(--border);border-radius:5px;color:var(--dim);
+    font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;flex:none}
+  .tog .dot{width:7px;height:7px;border-radius:50%;background:var(--dim2);box-shadow:inset 0 0 0 1px rgba(0,0,0,.4)}
+  .tog.on{color:var(--text);border-color:var(--border2)}
+  .tog.on .dot{background:var(--amber);box-shadow:0 0 5px rgba(240,168,48,.7)}
+  .spacer{flex:1 1 auto;min-width:8px}
+  .tblabel{font-family:var(--mono);font-size:10px;color:var(--dim2);text-transform:uppercase;letter-spacing:.6px;white-space:nowrap}
+  .elev{display:flex;align-items:center;gap:6px;flex:none}
+  .elev input[type=range]{width:74px}
+  .numbox{width:46px;height:24px;background:var(--panel2);border:1px solid var(--border);border-radius:4px;color:var(--text);
+    font-family:var(--mono);font-size:11px;text-align:center}
+
+  /* ---------- main ---------- */
+  #main{flex:1;display:flex;min-height:0}
+  #rail{width:268px;flex:none;background:var(--panel);border-right:1px solid var(--border);overflow-y:auto;display:flex;flex-direction:column}
+  #rail::-webkit-scrollbar{width:9px}
+  #rail::-webkit-scrollbar-thumb{background:var(--panel3);border-radius:5px;border:2px solid var(--panel)}
+  .panel{border-bottom:1px solid var(--border)}
+  .panel-h{display:flex;align-items:center;gap:7px;padding:9px 11px;cursor:pointer;user-select:none}
+  .panel-h .tw{color:var(--dim2);font-size:9px;width:9px;transition:transform .12s}
+  .panel.collapsed .tw{transform:rotate(-90deg)}
+  .panel-h .ttl{font-family:var(--mono);font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--dim);flex:1}
+  .panel-h .cnt{font-family:var(--mono);font-size:10px;color:var(--dim2);background:var(--panel2);border-radius:9px;padding:1px 7px}
+  .panel-b{padding:4px 11px 12px}
+  .panel.collapsed .panel-b{display:none}
+
+  .listrow{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:5px;cursor:pointer;border:1px solid transparent}
+  .listrow:hover{background:var(--panel2)}
+  .listrow.sel{background:rgba(240,168,48,.1);border-color:var(--amber-dim)}
+  .listrow .nm{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12.5px}
+  .listrow .sub{font-family:var(--mono);font-size:10px;color:var(--dim2)}
+  .swatch{width:9px;height:9px;border-radius:2px;flex:none}
+  .icbtn{width:22px;height:22px;border:none;background:transparent;color:var(--dim2);border-radius:4px;cursor:pointer;font-size:12px;flex:none}
+  .icbtn:hover{background:var(--panel3);color:var(--text)}
+  .empty{font-size:11.5px;color:var(--dim2);line-height:1.5;padding:6px 2px}
+  .empty b{color:var(--dim)}
+
+  .bonesearch{width:100%;height:26px;background:var(--panel2);border:1px solid var(--border);border-radius:5px;color:var(--text);
+    font-family:var(--mono);font-size:11px;padding:0 9px;margin-bottom:6px}
+  .bonesearch:focus{outline:none;border-color:var(--amber-dim)}
+  .bonelist{max-height:168px;overflow-y:auto;border:1px solid var(--border);border-radius:5px;background:var(--bg)}
+  .bonelist::-webkit-scrollbar{width:8px}
+  .bonelist::-webkit-scrollbar-thumb{background:var(--panel3);border-radius:4px}
+  .brow{display:flex;align-items:center;gap:7px;padding:5px 9px;cursor:pointer;font-family:var(--mono);font-size:11px;color:var(--dim)}
+  .brow:hover{background:var(--panel2);color:var(--text)}
+  .brow.sel{background:rgba(240,168,48,.12);color:var(--amber)}
+  .brow .jd{width:6px;height:6px;border-radius:50%;background:var(--dim2);flex:none}
+  .brow.sel .jd{background:var(--amber)}
+  .brow .bx{margin-left:auto;font-size:9.5px;color:var(--dim2)}
+
+  /* inspector fields */
+  .field{margin-bottom:9px}
+  .field>label{display:block;font-family:var(--mono);font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px}
+  .triplet{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px}
+  .triplet input,.single input{width:100%;height:26px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);
+    font-family:var(--mono);font-size:11px;padding:0 7px;text-align:right}
+  .triplet input:focus,.single input:focus{outline:none;border-color:var(--amber)}
+  .axislab{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;margin-bottom:3px}
+  .axislab span{font-family:var(--mono);font-size:9px;color:var(--dim2);text-align:center}
+  .rowflex{display:flex;align-items:center;gap:8px;margin-bottom:9px}
+  .rowflex label{font-family:var(--mono);font-size:10px;color:var(--dim);width:42px;text-transform:uppercase}
+  .rowflex input[type=range]{flex:1}
+  .rowflex input.num{width:58px;height:25px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);
+    font-family:var(--mono);font-size:11px;text-align:right;padding:0 7px}
+  .anchor-row{display:flex;gap:6px;margin-bottom:8px}
+  .anchor-row .btn{flex:1;justify-content:center}
+  .anchor-row .btn.armed{background:rgba(240,168,48,.16);border-color:var(--amber);color:var(--amber)}
+  .anchor-row .btn.tip.armed{background:rgba(127,212,230,.16);border-color:var(--cyan);color:var(--cyan)}
+  .kv{display:flex;justify-content:space-between;padding:4px 0;font-family:var(--mono);font-size:11px;border-top:1px solid var(--border)}
+  .kv .k{color:var(--dim)}
+  .kv .v{color:var(--text)}
+  .kv .v.amber{color:var(--amber)}
+  .kv .v.cyan{color:var(--cyan)}
+  .attachbox{margin-top:8px;padding:8px 9px;background:rgba(240,168,48,.07);border:1px solid var(--amber-dim);border-radius:6px}
+  .attachbox .lbl{font-family:var(--mono);font-size:9.5px;color:var(--amber);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px}
+  .attachbox .val{font-family:var(--mono);font-size:12.5px;color:var(--text)}
+  input[type=range]{-webkit-appearance:none;appearance:none;height:3px;background:var(--border2);border-radius:2px;outline:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;border-radius:50%;background:var(--amber);cursor:pointer;border:2px solid var(--panel)}
+  .minibtns{display:flex;gap:6px;margin-top:8px}
+  .minibtns .btn{flex:1;justify-content:center}
+
+  /* ---------- viewport ---------- */
+  #viewport{flex:1;position:relative;min-width:0;background:var(--bg)}
+  #gl{display:block;width:100%;height:100%}
+  .vp-overlay{position:absolute;pointer-events:none;font-family:var(--mono)}
+  #vp-readout{left:12px;bottom:12px;font-size:11px;color:var(--dim);background:rgba(14,14,17,.7);border:1px solid var(--border);
+    border-radius:6px;padding:7px 11px;line-height:1.55}
+  #vp-readout .hl{color:var(--text)}
+  #vp-readout .am{color:var(--amber)}
+  #vp-mode{right:12px;top:12px;font-size:10.5px;color:var(--cyan);background:rgba(14,14,17,.78);border:1px solid #2e4a52;
+    border-radius:6px;padding:6px 11px;letter-spacing:.5px;display:none}
+  #vp-mode.show{display:block}
+  #vp-hint{left:50%;bottom:12px;transform:translateX(-50%);font-size:10.5px;color:var(--dim2);background:rgba(14,14,17,.6);
+    border:1px solid var(--border);border-radius:6px;padding:5px 11px;white-space:nowrap}
+  #vp-arm{left:50%;top:14px;transform:translateX(-50%);font-size:11px;color:var(--amber);background:rgba(14,14,17,.85);
+    border:1px solid var(--amber-dim);border-radius:6px;padding:6px 13px;display:none;letter-spacing:.3px}
+  #vp-arm.show{display:block}
+
+  /* ---------- contact sheet ---------- */
+  #sheet{position:absolute;inset:0;background:rgba(8,8,10,.86);backdrop-filter:blur(3px);display:none;align-items:center;justify-content:center;z-index:40}
+  #sheet.show{display:flex}
+  .sheet-card{background:var(--panel);border:1px solid var(--border2);border-radius:10px;padding:16px;max-width:92%;max-height:92%;display:flex;flex-direction:column;gap:12px}
+  .sheet-head{display:flex;align-items:center;gap:12px}
+  .sheet-head .t{font-family:var(--mono);font-size:13px;color:var(--text);flex:1}
+  .sheet-head .t span{color:var(--dim2);font-size:11px}
+  #sheetCanvasWrap{overflow:auto;border:1px solid var(--border);border-radius:6px;background:#000}
+  #sheetCanvas{display:block}
+
+  /* ---------- command palette ---------- */
+  #palette{position:fixed;inset:0;background:rgba(8,8,10,.5);display:none;align-items:flex-start;justify-content:center;z-index:60;padding-top:12vh}
+  #palette.show{display:flex}
+  .pal-box{width:560px;max-width:92vw;background:var(--panel);border:1px solid var(--border2);border-radius:11px;overflow:hidden;
+    box-shadow:0 24px 70px rgba(0,0,0,.6)}
+  .pal-box input{width:100%;height:46px;background:transparent;border:none;border-bottom:1px solid var(--border);color:var(--text);
+    font-family:var(--sans);font-size:15px;padding:0 16px}
+  .pal-box input:focus{outline:none}
+  .pal-list{max-height:46vh;overflow-y:auto;padding:6px}
+  .pal-list::-webkit-scrollbar{width:9px}
+  .pal-list::-webkit-scrollbar-thumb{background:var(--panel3);border-radius:5px}
+  .pal-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:7px;cursor:pointer;font-size:13.5px}
+  .pal-item .g{font-family:var(--mono);font-size:9.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--dim2);
+    background:var(--panel2);border-radius:5px;padding:2px 7px;margin-left:auto}
+  .pal-item.active{background:rgba(240,168,48,.13)}
+  .pal-item.active .g{color:var(--amber)}
+  .pal-empty{padding:18px;text-align:center;color:var(--dim2);font-size:12.5px}
+
+  /* toast */
+  #toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);background:var(--panel3);border:1px solid var(--border2);
+    color:var(--text);font-size:12.5px;padding:9px 16px;border-radius:8px;opacity:0;transition:.22s;pointer-events:none;z-index:80;font-family:var(--mono)}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .hidden{display:none!important}
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<div id="app">
+  <div id="toolbar">
+    <div class="brand">sprite&#8209;motion <b>3D</b></div>
+    <div class="tbsep"></div>
+    <button class="btn" id="btnLoadChar"><span class="ic">&#128193;</span>Load Character</button>
+    <button class="btn" id="btnLoadWeapon"><span class="ic">&#9876;</span>Load Weapon</button>
+    <button class="btn ghost" id="btnDemo">Load demo rig</button>
+    <div class="tbsep"></div>
+    <div class="seg" id="gizmoSeg" title="Gizmo mode · 1/2/3 or G R S">
+      <button data-gz="translate" class="on">Move</button>
+      <button data-gz="rotate">Rotate</button>
+      <button data-gz="scale">Scale</button>
+    </div>
+    <button class="tog on" id="togSnap" title="Snap grip to nearest joint (hold Alt to disable live)"><span class="dot"></span>Snap</button>
+    <div class="tbsep"></div>
+    <div class="seg" id="viewSeg" title="View (V to cycle)">
+      <button data-view="skeleton">Skel</button>
+      <button data-view="mesh" class="on">Mesh</button>
+      <button data-view="ghost">Ghost</button>
+    </div>
+    <button class="tog" id="togSil" title="Silhouette read check"><span class="dot"></span>Silhouette</button>
+    <button class="btn ghost" id="btnResetBone" title="Reset selected bone to rest">Reset bone</button>
+    <button class="btn ghost" id="btnResetPose" title="Reset whole pose to rest">Reset pose</button>
+    <button class="btn" id="btnRef" title="Load concept reference image (PNG)">Reference</button>
+    <span class="refctl hidden" id="refCtl" style="display:inline-flex;align-items:center;gap:6px;flex:none">
+      <button class="tog on" id="togRef" title="Show/hide reference"><span class="dot"></span>Ref</button>
+      <input type="range" id="refOp" min="0" max="100" value="50" style="width:62px" title="Reference opacity">
+    </span>
+    <div class="tbsep"></div>
+    <span class="tblabel">Cam</span>
+    <button class="btn ghost" id="btnFree" style="height:26px;padding:0 9px">Free</button>
+    <div class="seg dir" id="dirSeg">
+      <button data-dir="N">N</button><button data-dir="NE">NE</button><button data-dir="E">E</button>
+      <button data-dir="SE">SE</button><button data-dir="S">S</button><button data-dir="SW">SW</button>
+      <button data-dir="W">W</button><button data-dir="NW">NW</button>
+    </div>
+    <div class="elev" title="2.5D camera elevation (30–45°)">
+      <span class="tblabel">Elev</span>
+      <input type="range" id="elevRange" min="30" max="45" step="1" value="35">
+      <input class="numbox" id="elevNum" value="35°">
+    </div>
+    <button class="btn" id="btnSheet"><span class="ic">&#9783;</span>Contact sheet</button>
+    <div class="spacer"></div>
+    <button class="btn ghost" id="btnSave">Save</button>
+    <button class="btn ghost" id="btnLoadProj">Load</button>
+    <button class="btn amber" id="btnExport">Export JSON</button>
+  </div>
+
+  <div id="main">
+    <div id="rail">
+      <!-- Characters -->
+      <div class="panel" id="panelChars">
+        <div class="panel-h"><span class="tw">&#9660;</span><span class="ttl">Characters</span><span class="cnt" id="charCnt">0</span></div>
+        <div class="panel-b"><div id="charList"></div></div>
+      </div>
+      <!-- Skeleton / bone pick -->
+      <div class="panel" id="panelBones">
+        <div class="panel-h"><span class="tw">&#9660;</span><span class="ttl">Skeleton &middot; socket bone</span><span class="cnt" id="boneCnt">0</span></div>
+        <div class="panel-b">
+          <input class="bonesearch" id="boneSearch" placeholder="filter bones…">
+          <div class="bonelist" id="boneList"></div>
+          <div class="kv" style="margin-top:8px"><span class="k">selected</span><span class="v amber" id="selBoneName">—</span></div>
+          <div class="kv"><span class="k">world (x,y,z)</span><span class="v" id="selBonePos">—</span></div>
+        </div>
+      </div>
+      <!-- Library -->
+      <div class="panel" id="panelLib">
+        <div class="panel-h"><span class="tw">&#9660;</span><span class="ttl">Weapons / Library</span><span class="cnt" id="libCnt">0</span></div>
+        <div class="panel-b"><div id="libList"></div></div>
+      </div>
+      <!-- Inspector -->
+      <div class="panel" id="panelInsp">
+        <div class="panel-h"><span class="tw">&#9660;</span><span class="ttl">Inspector</span></div>
+        <div class="panel-b"><div id="inspector"></div></div>
+      </div>
+      <!-- Presets -->
+      <div class="panel" id="panelPre">
+        <div class="panel-h"><span class="tw">&#9660;</span><span class="ttl">Presets</span><span class="cnt" id="preCnt">0</span></div>
+        <div class="panel-b"><div id="preList"></div></div>
+      </div>
+    </div>
+
+    <div id="viewport">
+      <canvas id="gl"></canvas>
+      <div class="vp-overlay" id="vp-readout"></div>
+      <div class="vp-overlay" id="vp-mode"></div>
+      <div class="vp-overlay" id="vp-arm"></div>
+      <div class="vp-overlay" id="vp-hint">double-click a bone to select &middot; arrow keys pose it &middot; drag empty space to orbit &middot; wheel to zoom &middot; ⌘/Ctrl-K or double right-click for commands</div>
+      <div id="sheet">
+        <div class="sheet-card">
+          <div class="sheet-head">
+            <div class="t">8-direction contact sheet <span>2.5D render-QA read check</span></div>
+            <button class="btn" id="btnSheetDl">Download PNG</button>
+            <button class="btn ghost" id="btnSheetClose">Close</button>
+          </div>
+          <div id="sheetCanvasWrap"><canvas id="sheetCanvas"></canvas></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="palette"><div class="pal-box">
+  <input id="palInput" placeholder="Type a command…" autocomplete="off" spellcheck="false">
+  <div class="pal-list" id="palList"></div>
+</div></div>
+<div id="toast"></div>
+
+<input type="file" id="fileChar" accept=".glb,.gltf" class="hidden">
+<input type="file" id="fileWeapon" accept=".glb,.gltf" class="hidden">
+<input type="file" id="fileProj" accept=".json" class="hidden">
+<input type="file" id="fileRef" accept="image/*" class="hidden">
+
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { TransformControls } from 'three/addons/controls/TransformControls.js';
+
+// ============================================================ helpers
+const $ = (s)=>document.querySelector(s);
+const $$ = (s)=>Array.from(document.querySelectorAll(s));
+const r4 = (n)=>Math.round(n*1e4)/1e4;
+const fmt = (n)=>{ const v=r4(n); return (v>=0?' ':'')+v.toFixed(3); };
+const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
+let TID=0;
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(TID); TID=setTimeout(()=>t.classList.remove('show'),1600); }
+
+// ============================================================ three.js core
+const canvas = $('#gl');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, preserveDrawingBuffer:true });
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setClearColor(0x0e0e11, 1);
+renderer.shadowMap.enabled = false;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0e0e11);
+
+const SILH_GREY = new THREE.MeshBasicMaterial({ color:0x9a9aa2 });
+
+// lighting — bright, neutral 3-point so meshes always read
+const hemi = new THREE.HemisphereLight(0xffffff, 0x40404a, 1.05); scene.add(hemi);
+const key = new THREE.DirectionalLight(0xffffff, 1.7); key.position.set(2.5,4,3); scene.add(key);
+const fill = new THREE.DirectionalLight(0xbfd4ff, 0.7); fill.position.set(-3,1.5,-2); scene.add(fill);
+const rim = new THREE.DirectionalLight(0xffffff, 0.5); rim.position.set(0,3,-4); scene.add(rim);
+scene.add(new THREE.AmbientLight(0xffffff, 0.35));
+
+const grid = new THREE.GridHelper(6, 24, 0x3a3a44, 0x232329); grid.position.y=0; scene.add(grid);
+const axes = new THREE.AxesHelper(0.5); axes.position.y=0.001; scene.add(axes);
+
+// cameras
+let aspect = 1;
+const perspCam = new THREE.PerspectiveCamera(45, 1, 0.01, 100);
+perspCam.position.set(1.6, 1.4, 2.6);
+const orthoCam = new THREE.OrthographicCamera(-1,1,1,-1,-50,50);
+let activeCam = perspCam;
+
+const orbit = new OrbitControls(perspCam, renderer.domElement);
+orbit.enableDamping = true; orbit.dampingFactor=0.12;
+orbit.target.set(0,1.0,0);
+
+const tc = new TransformControls(perspCam, renderer.domElement);
+tc.setSize(0.6);
+tc.addEventListener('dragging-changed', e=>{ orbit.enabled = !e.value; if(!e.value){ clearSnapRing(); persistSoon(); } });
+tc.addEventListener('objectChange', onGizmoChange);
+scene.add(tc);
+
+// snap ring
+const snapRing = new THREE.Mesh(new THREE.TorusGeometry(0.03,0.006,8,28), new THREE.MeshBasicMaterial({color:0xf0a830}));
+snapRing.visible=false; snapRing.renderOrder=999; scene.add(snapRing);
+function clearSnapRing(){ snapRing.visible=false; }
+
+// ============================================================ state model
+let CHARS=[];           // character records
+let LIB=[];             // weapon library assets
+let PRESETS=[];
+let activeCharId=null;
+let selBoneName=null;
+let selWeaponId=null;
+let CID=0, LID=0, WID=0;
+
+let gizmoMode='translate';
+let snapOn=true, silhouetteOn=false, elevationDeg=35;
+let cameraDir='Free';
+let anchorMode=null;    // 'grip' | 'tip' | null  (mesh-pick mode)
+let viewMode='mesh';    // 'skeleton' | 'mesh' | 'ghost'
+let refPlane=null, refOpacity=0.5, refVisible=true;
+const glbCache={};      // id -> ArrayBuffer (for round-trip)
+
+const BUILTIN_PRESETS=[
+  { name:'two-hand polearm', boneRole:'hand', position:[0,0,0], quaternion:[0,0,0,1], scale:1.2, gripLocal:[0,-0.35,0], tipLocal:[0,0.45,0] },
+  { name:'one-hand sword guard', boneRole:'hand', position:[0,0.02,0], quaternion:[0.131,0,0,0.991], scale:0.9, gripLocal:[0,-0.3,0], tipLocal:[0,0.45,0] }
+];
+PRESETS = BUILTIN_PRESETS.map(p=>JSON.parse(JSON.stringify(p)));
+
+function activeChar(){ return CHARS.find(c=>c.id===activeCharId)||null; }
+function selWeapon(){ const c=activeChar(); return c? c.weapons.find(w=>w.id===selWeaponId)||null : null; }
+function libById(id){ return LIB.find(l=>l.id===id)||null; }
+function boneByName(c,name){ return c? c.bones.find(b=>b.name===name)||null : null; }
+function roleOf(name){ return /hand|wrist|bone_9$/i.test(name||'') ? 'hand' : (name||'hand'); }
+function resolveRole(c, role){
+  if(!c) return null;
+  if(role==='hand'){ const h=c.bones.find(b=>/hand\.?r|righthand|hand_r|hand|wrist|bone_9$/i.test(b.name)); return h?h.name:c.bones[0].name; }
+  const hit=c.bones.find(b=>b.name===role); return hit?hit.name:(c.bones[0]&&c.bones[0].name);
+}
+
+// ============================================================ demo rig
+function buildDemoRig(){
+  const defs=[
+    ['hips',null,[0,1.0,0]],
+    ['spine','hips',[0,0.16,0]],
+    ['chest','spine',[0,0.20,0]],
+    ['neck','chest',[0,0.12,0]],
+    ['head','neck',[0,0.12,0]],
+    ['shoulder.R','chest',[0.16,0.04,0]],
+    ['upperArm.R','shoulder.R',[0.15,0,0]],
+    ['foreArm.R','upperArm.R',[0.16,0,0]],
+    ['hand.R','foreArm.R',[0.12,0,0]],
+    ['shoulder.L','chest',[-0.16,0.04,0]],
+    ['upperArm.L','shoulder.L',[-0.15,0,0]],
+    ['foreArm.L','upperArm.L',[-0.16,0,0]],
+    ['hand.L','foreArm.L',[-0.12,0,0]],
+    ['upperLeg.R','hips',[0.10,-0.06,0]],
+    ['lowerLeg.R','upperLeg.R',[0,-0.42,0]],
+    ['foot.R','lowerLeg.R',[0,-0.40,0]],
+    ['upperLeg.L','hips',[-0.10,-0.06,0]],
+    ['lowerLeg.L','upperLeg.L',[0,-0.42,0]],
+    ['foot.L','lowerLeg.L',[0,-0.40,0]],
+  ];
+  const root=new THREE.Group(); root.name='demo_rig';
+  const boneObjs={}; const order=[];
+  defs.forEach(([name,parent,off])=>{
+    const b=new THREE.Bone(); b.name=name; b.position.set(off[0],off[1],off[2]);
+    boneObjs[name]=b; order.push(name);
+    if(parent) boneObjs[parent].add(b); else root.add(b);
+  });
+  root.updateMatrixWorld(true);
+  // visible body: a limb mesh on each bone that has a parent (parent->this)
+  const bodyMat=new THREE.MeshStandardMaterial({color:0x6b7280,roughness:0.75,metalness:0.05});
+  order.forEach(name=>{
+    const b=boneObjs[name]; const len=b.position.length();
+    if(len>0.001 && b.parent){
+      const geo=new THREE.CapsuleGeometry(name==='head'?0.085:0.045, Math.max(len-0.05,0.01), 4, 8);
+      const m=new THREE.Mesh(geo, bodyMat);
+      // place midway between parent origin and this bone origin, oriented along local +offset
+      const mid=b.position.clone().multiplyScalar(0.5);
+      m.position.copy(mid);
+      const dir=b.position.clone().normalize();
+      m.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), dir);
+      m.userData.bodyMat=true;
+      b.parent.add(m);
+    }
+  });
+  // torso block for bulk
+  const torso=new THREE.Mesh(new THREE.CapsuleGeometry(0.12,0.26,6,12), bodyMat);
+  torso.position.set(0,0.18,0); boneObjs['hips'].add(torso);
+  return finalizeCharacter('Demo rig (synthetic)', root, order.map(n=>boneObjs[n]), true);
+}
+
+// ============================================================ character finalize (demo or GLB)
+function finalizeCharacter(name, root, bones, isDemo){
+  root.updateMatrixWorld(true);
+  // tag body meshes (for view ghosting) and remember their base material settings
+  root.traverse(o=>{ if(o.isMesh){ o.userData.charBody=true; const ms=Array.isArray(o.material)?o.material:[o.material];
+    o.userData._matBase=ms.map(mm=>({t:mm.transparent,o:mm.opacity,d:mm.depthWrite})); } });
+  const rec={ id:'c'+(++CID), name, root, bones, isDemo, weapons:[], jointMarkers:[], helper:null, selectedBone:null, rest:{} };
+  // capture bind/rest pose (local quaternion + position per bone) so reset is exact
+  bones.forEach(b=>{ rec.rest[b.name]={ q:b.quaternion.toArray(), p:b.position.toArray() }; });
+  // skeleton helper
+  const helper=new THREE.SkeletonHelper(root);
+  helper.material.linewidth=2; helper.material.color=new THREE.Color(0x7fd4e6); helper.material.transparent=true; helper.material.opacity=0.65;
+  rec.helper=helper; scene.add(helper);
+  // joint markers (clickable) — one sphere per bone, child of bone at origin
+  const markGeo=new THREE.SphereGeometry(0.018,12,10);
+  bones.forEach(b=>{
+    const mk=new THREE.Mesh(markGeo, new THREE.MeshBasicMaterial({color:0xcfd6dd}));
+    mk.renderOrder=20; mk.userData.boneName=b.name; mk.userData.charId=rec.id;
+    b.add(mk); rec.jointMarkers.push(mk);
+  });
+  scene.add(root);
+  CHARS.push(rec);
+  return rec;
+}
+
+function removeCharacter(id){
+  const c=CHARS.find(x=>x.id===id); if(!c) return;
+  c.weapons.forEach(w=>disposeWeapon(c,w,true));
+  if(c.helper) scene.remove(c.helper);
+  scene.remove(c.root);
+  CHARS=CHARS.filter(x=>x.id!==id);
+  if(activeCharId===id){ activeCharId=CHARS[0]?CHARS[0].id:null; selBoneName=null; selWeaponId=null; tc.detach(); }
+  setActiveChar(activeCharId);
+}
+
+function setActiveChar(id){
+  activeCharId=id;
+  selBoneName=null; selWeaponId=null; tc.detach(); anchorMode=null;
+  const c=activeChar();
+  CHARS.forEach(x=>{ const on=(x.id===id); x.root.visible=on; if(x.helper)x.helper.visible=on; });
+  if(c){ selBoneName=c.selectedBone||resolveRole(c,'hand'); c.selectedBone=selBoneName; frameCharacter(c); }
+  applyGizmo(); applyVisibility(); positionRefPlane();
+  refreshAll();
+}
+
+// ============================================================ weapon assets / placement
+function defaultTipFor(object){
+  // farthest vertex from local origin along dominant axis
+  const box=new THREE.Box3().setFromObject(object);
+  const size=new THREE.Vector3(); box.getSize(size);
+  const c=new THREE.Vector3(); box.getCenter(c);
+  // dominant axis
+  let axis='y', mx=size.y; if(size.x>mx){axis='x';mx=size.x;} if(size.z>mx){axis='z';mx=size.z;}
+  const tip=[0,0,0], grip=[0,0,0];
+  if(axis==='x'){ tip[0]=box.max.x; grip[0]=box.min.x; }
+  else if(axis==='y'){ tip[1]=box.max.y; grip[1]=box.min.y; }
+  else { tip[2]=box.max.z; grip[2]=box.min.z; }
+  return { grip, tip };
+}
+
+function addLibAsset(name, makeObject, isBox){
+  const proto=makeObject();
+  const dt=defaultTipFor(proto);
+  const asset={ id:'l'+(++LID), name, make:makeObject, isBox:!!isBox, gripLocal:dt.grip.slice(), tipLocal:dt.tip.slice() };
+  LIB.push(asset); return asset;
+}
+
+function makeBoxWeapon(){
+  const g=new THREE.Group(); g.name='box_weapon';
+  const haft=new THREE.Mesh(new THREE.BoxGeometry(0.035,0.8,0.035), new THREE.MeshStandardMaterial({color:0x8a6a3a,roughness:0.6}));
+  haft.position.y=0.0; g.add(haft);
+  const headm=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.13,0.02), new THREE.MeshStandardMaterial({color:0xb8c0c8,metalness:0.6,roughness:0.35}));
+  headm.position.y=0.42; g.add(headm);
+  const spike=new THREE.Mesh(new THREE.ConeGeometry(0.02,0.12,8), new THREE.MeshStandardMaterial({color:0xc8d0d8,metalness:0.6,roughness:0.3}));
+  spike.position.y=0.55; g.add(spike);
+  return g;
+}
+
+function placeWeapon(asset, charId, boneName, opts){
+  const c=CHARS.find(x=>x.id===charId); if(!c) return null;
+  const bone=boneByName(c, boneName)||boneByName(c, resolveRole(c,'hand'));
+  if(!bone) { toast('Pick a socket bone first'); return null; }
+  const obj=asset.make ? asset.make() : asset._object.clone(true);
+  obj.name=asset.name;
+  const w={ id:'w'+(++WID), libId:asset.id, asset:asset.name, object:obj, bone:bone.name,
+            gripLocal:(opts&&opts.gripLocal)||asset.gripLocal.slice(),
+            tipLocal:(opts&&opts.tipLocal)||asset.tipLocal.slice(),
+            gripMk:null, tipMk:null };
+  bone.add(obj);
+  if(opts&&opts.position) obj.position.fromArray(opts.position);
+  if(opts&&opts.quaternion) obj.quaternion.fromArray(opts.quaternion);
+  if(opts&&opts.scale!=null) obj.scale.setScalar(opts.scale);
+  buildAnchorMarkers(w);
+  c.weapons.push(w);
+  return w;
+}
+
+function buildAnchorMarkers(w){
+  if(w.gripMk){ w.object.remove(w.gripMk); }
+  if(w.tipMk){ w.object.remove(w.tipMk); }
+  const gm=new THREE.Mesh(new THREE.SphereGeometry(0.022,14,12), new THREE.MeshBasicMaterial({color:0xf0a830}));
+  gm.position.fromArray(w.gripLocal); gm.renderOrder=30; w.object.add(gm); w.gripMk=gm;
+  const tm=new THREE.Mesh(new THREE.SphereGeometry(0.020,14,12), new THREE.MeshBasicMaterial({color:0x7fd4e6}));
+  tm.position.fromArray(w.tipLocal); tm.renderOrder=30; w.object.add(tm); w.tipMk=tm;
+}
+
+function disposeWeapon(c,w,silent){
+  if(w.object&&w.object.parent) w.object.parent.remove(w.object);
+}
+function removeWeapon(id){
+  const c=activeChar(); if(!c) return;
+  const w=c.weapons.find(x=>x.id===id); if(!w) return;
+  disposeWeapon(c,w); c.weapons=c.weapons.filter(x=>x.id!==id);
+  if(selWeaponId===id){ selWeaponId=null; tc.detach(); }
+  refreshAll(); persistSoon();
+}
+
+function selectWeapon(id){
+  selWeaponId=id; anchorMode=null;
+  applyGizmo();
+  refreshAll();
+}
+// select a bone for posing (and as the socket for the next weapon)
+function selectBone(name){
+  const c=activeChar(); if(!c) return;
+  selBoneName=name; c.selectedBone=name; selWeaponId=null; anchorMode=null;
+  applyGizmo();
+  refreshAll();
+}
+function deselectAll(){
+  selWeaponId=null; selBoneName=null; const c=activeChar(); if(c) c.selectedBone=null;
+  tc.detach(); anchorMode=null; setArm&&setArm();
+  refreshAll();
+}
+
+// ============================================================ gizmo target resolution (bone OR weapon)
+function gizmoTargetType(){ if(selWeapon()) return 'weapon'; if(activeChar()&&selBoneName) return 'bone'; return null; }
+function boneIsRoot(b){ return !!b && (!b.parent || !b.parent.isBone); }
+function effectiveMode(){
+  const t=gizmoTargetType();
+  if(t==='weapon') return gizmoMode;
+  if(t==='bone'){ const b=boneByName(activeChar(),selBoneName); let m=gizmoMode;
+    if(m==='scale') m='rotate'; if(m==='translate' && !boneIsRoot(b)) m='rotate'; return m; }
+  return gizmoMode;
+}
+function applyGizmo(){
+  const c=activeChar(); const w=selWeapon();
+  if(w){ tc.attach(w.object); }
+  else if(c && selBoneName){ const b=boneByName(c,selBoneName); if(b) tc.attach(b); else { tc.detach(); updateGizmoSeg(); return; } }
+  else { tc.detach(); updateGizmoSeg(); return; }
+  tc.setMode(effectiveMode()); updateGizmoSeg();
+}
+function updateGizmoSeg(){
+  const m=effectiveMode(); const t=gizmoTargetType();
+  const b=boneByName(activeChar(),selBoneName); const isRoot=boneIsRoot(b);
+  $$('#gizmoSeg button').forEach(x=>{
+    x.classList.toggle('on', x.dataset.gz===m);
+    let dis=false;
+    if(t==='bone'){ if(x.dataset.gz==='scale') dis=true; if(x.dataset.gz==='translate' && !isRoot) dis=true; }
+    x.disabled=dis; x.style.opacity=dis?'0.32':''; x.style.cursor=dis?'not-allowed':'';
+  });
+}
+
+// a weapon-local point expressed in CHARACTER-ROOT space (apply weapon world matrix, then root-inverse)
+function pointInRoot(c,w,arr){
+  w.object.updateMatrixWorld(true);
+  const world=w.object.localToWorld(new THREE.Vector3().fromArray(arr));
+  c.root.updateMatrixWorld(true);
+  const local=c.root.worldToLocal(world.clone());
+  return [r4(local.x), r4(local.y), r4(local.z)];
+}
+// resolved attach point: grip world position expressed in character-root space
+function attachPoint(c,w){ return pointInRoot(c,w,w.gripLocal); }
+// resolved tip point: tip world position expressed in character-root space
+function tipPoint(c,w){ return pointInRoot(c,w,w.tipLocal); }
+// weapon transform relative to the CHARACTER ROOT: root.matrixWorld⁻¹ · weapon.matrixWorld, decomposed
+function rootTransformOf(c,w){
+  w.object.updateMatrixWorld(true); c.root.updateMatrixWorld(true);
+  const m=new THREE.Matrix4().copy(c.root.matrixWorld).invert().multiply(w.object.matrixWorld);
+  const pos=new THREE.Vector3(), q=new THREE.Quaternion(), scl=new THREE.Vector3();
+  m.decompose(pos,q,scl);
+  return { position:[r4(pos.x),r4(pos.y),r4(pos.z)],
+    quaternion:[r4(q.x),r4(q.y),r4(q.z),r4(q.w)], scale:r4(scl.x) };
+}
+
+// ============================================================ presets
+function presetFromWeapon(w, name){
+  return { name, boneRole:roleOf(w.bone),
+    position:[r4(w.object.position.x),r4(w.object.position.y),r4(w.object.position.z)],
+    quaternion:[r4(w.object.quaternion.x),r4(w.object.quaternion.y),r4(w.object.quaternion.z),r4(w.object.quaternion.w)],
+    scale:r4(w.object.scale.x),
+    gripLocal:w.gripLocal.map(r4), tipLocal:w.tipLocal.map(r4) };
+}
+function applyPreset(w, p){
+  if(!w||!p) return;
+  const c=activeChar();
+  const targetBone=resolveRole(c, p.boneRole);
+  if(targetBone && targetBone!==w.bone){
+    const nb=boneByName(c,targetBone); if(nb){ nb.add(w.object); w.bone=targetBone; }
+  }
+  w.object.position.fromArray(p.position);
+  w.object.quaternion.fromArray(p.quaternion);
+  w.object.scale.setScalar(p.scale);
+  w.gripLocal=p.gripLocal.slice(); w.tipLocal=p.tipLocal.slice();
+  buildAnchorMarkers(w);
+}
+
+// ============================================================ gizmo change + snap
+function onGizmoChange(){
+  if(gizmoTargetType()==='bone'){ syncBoneInspectorLive(); return; }
+  const w=selWeapon(); if(!w) return;
+  if(gizmoMode==='scale'){
+    // keep uniform
+    const s=(w.object.scale.x+w.object.scale.y+w.object.scale.z)/3;
+    w.object.scale.setScalar(s);
+  }
+  if(gizmoMode==='translate' && snapOn && !altDown){
+    trySnap(w);
+  } else clearSnapRing();
+  syncInspectorLive(w);
+}
+
+let altDown=false;
+addEventListener('keydown',e=>{ if(e.key==='Alt') altDown=true; });
+addEventListener('keyup',e=>{ if(e.key==='Alt') altDown=false; });
+
+// arrow-key posing — rotate the selected bone (or weapon) around WORLD axes. Reliable + precise,
+// independent of grabbing the gizmo rings. Up/Down = pitch, Left/Right = yaw, Ctrl+L/R = roll, Shift = fine.
+addEventListener('keydown',e=>{
+  if(!e.key || e.key.slice(0,5)!=='Arrow') return;
+  if(e.target && (e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA')) return;
+  const c=activeChar(); if(!c) return;
+  const w=selWeapon();
+  const target = w ? w.object : (selBoneName ? boneByName(c,selBoneName) : null);
+  if(!target) return;
+  e.preventDefault();
+  const a=(e.shiftKey?1:5)*Math.PI/180;
+  let ax, s;
+  if(e.key==='ArrowUp'){ ax=new THREE.Vector3(1,0,0); s=-1; }
+  else if(e.key==='ArrowDown'){ ax=new THREE.Vector3(1,0,0); s=1; }
+  else if(e.key==='ArrowLeft'){ ax=(e.ctrlKey||e.metaKey)?new THREE.Vector3(0,0,1):new THREE.Vector3(0,1,0); s=1; }
+  else if(e.key==='ArrowRight'){ ax=(e.ctrlKey||e.metaKey)?new THREE.Vector3(0,0,1):new THREE.Vector3(0,1,0); s=-1; }
+  else return;
+  const parent=target.parent;
+  const pwq = parent ? parent.getWorldQuaternion(new THREE.Quaternion()) : new THREE.Quaternion();
+  const qW = new THREE.Quaternion().setFromAxisAngle(ax, s*a);
+  target.quaternion.premultiply(pwq.clone().invert().multiply(qW).multiply(pwq));   // rotate about the world axis
+  target.updateMatrixWorld(true);
+  onGizmoChange();
+  if(typeof persistSoon==='function') persistSoon();
+});
+
+function trySnap(w){
+  const c=activeChar(); if(!c) return;
+  w.object.updateMatrixWorld(true);
+  const gripWorld=w.object.localToWorld(new THREE.Vector3().fromArray(w.gripLocal));
+  const gs=worldToScreen(gripWorld);
+  let best=null, bd=14; // px threshold
+  c.bones.forEach(b=>{
+    const bw=new THREE.Vector3(); b.getWorldPosition(bw);
+    const ss=worldToScreen(bw);
+    const d=Math.hypot(ss.x-gs.x, ss.y-gs.y);
+    if(d<bd){ bd=d; best={bone:b, world:bw}; }
+  });
+  if(best){
+    // move weapon so grip world == joint world; reparent to that bone
+    if(best.bone.name!==w.bone){ best.bone.add(w.object); w.bone=best.bone.name; selBoneName=w.bone; c.selectedBone=w.bone; }
+    best.bone.updateMatrixWorld(true);
+    w.object.updateMatrixWorld(true);
+    const curGripWorld=w.object.localToWorld(new THREE.Vector3().fromArray(w.gripLocal));
+    const delta=best.world.clone().sub(curGripWorld);
+    const curOriginWorld=w.object.getWorldPosition(new THREE.Vector3());
+    const desired=curOriginWorld.add(delta);
+    w.object.position.copy(best.bone.worldToLocal(desired));
+    snapRing.position.copy(best.world); snapRing.visible=true;
+    snapRing.quaternion.copy(activeCam.quaternion);
+  } else clearSnapRing();
+}
+
+function worldToScreen(v){
+  const p=v.clone().project(activeCam);
+  const rect=renderer.domElement.getBoundingClientRect();
+  return { x:(p.x*0.5+0.5)*rect.width, y:(-p.y*0.5+0.5)*rect.height };
+}
+
+// ============================================================ raycast picking (joints + weapon mesh)
+const ray=new THREE.Raycaster();
+const ndc=new THREE.Vector2();
+let pointerMoved=false, downPos=null;
+
+function setNdc(e){
+  const rect=renderer.domElement.getBoundingClientRect();
+  ndc.x=((e.clientX-rect.left)/rect.width)*2-1;
+  ndc.y=-((e.clientY-rect.top)/rect.height)*2+1;
+}
+
+renderer.domElement.addEventListener('pointerdown',e=>{ downPos={x:e.clientX,y:e.clientY}; pointerMoved=false; });
+renderer.domElement.addEventListener('pointermove',e=>{
+  if(downPos && (Math.abs(e.clientX-downPos.x)>3||Math.abs(e.clientY-downPos.y)>3)) pointerMoved=true;
+  updateReadout(e);
+});
+renderer.domElement.addEventListener('pointerup',e=>{
+  if(pointerMoved){ downPos=null; return; }
+  downPos=null;
+  if(tc.dragging) return;
+  setNdc(e); ray.setFromCamera(ndc, activeCam);
+  const c=activeChar(); if(!c) return;
+
+  // anchor-pick mode: click the selected weapon mesh
+  if(anchorMode){
+    const w=selWeapon();
+    if(w){
+      const hits=ray.intersectObject(w.object, true).filter(h=>h.object!==w.gripMk&&h.object!==w.tipMk);
+      if(hits.length){
+        const local=w.object.worldToLocal(hits[0].point.clone());
+        if(anchorMode==='grip'){ w.gripLocal=[r4(local.x),r4(local.y),r4(local.z)]; w.gripMk.position.copy(local); }
+        else { w.tipLocal=[r4(local.x),r4(local.y),r4(local.z)]; w.tipMk.position.copy(local); }
+        const a=libById(w.libId); // mirror onto asset default so future drops inherit
+        if(a){ if(anchorMode==='grip') a.gripLocal=w.gripLocal.slice(); else a.tipLocal=w.tipLocal.slice(); }
+        anchorMode=null; setArm(); refreshInspector(); persistSoon();
+        toast('Anchor set'); return;
+      }
+    }
+    return;
+  }
+
+  // joint markers
+  const markers=c.jointMarkers;
+  const jhits=ray.intersectObjects(markers, false);
+  if(jhits.length){
+    selectBone(jhits[0].object.userData.boneName); return;
+  }
+  // weapon meshes -> select weapon
+  for(const w of c.weapons){
+    const wh=ray.intersectObject(w.object, true);
+    if(wh.length){ selectWeapon(w.id); return; }
+  }
+  // empty space -> deselect, return to orbit
+  deselectAll();
+});
+
+// double-click anywhere near a joint -> select that bone (forgiving; the markers are small to hit precisely)
+renderer.domElement.addEventListener('dblclick',e=>{
+  if(tc.dragging || tc.axis) return;                    // don't hijack an in-progress gizmo interaction
+  const c=activeChar(); if(!c||!c.jointMarkers||!c.jointMarkers.length) return;
+  const rect=renderer.domElement.getBoundingClientRect();
+  const cx=e.clientX-rect.left, cy=e.clientY-rect.top;
+  c.root.updateMatrixWorld(true);
+  const v=new THREE.Vector3(); let best=null, bestD=Infinity;
+  for(const mk of c.jointMarkers){
+    mk.getWorldPosition(v); v.project(activeCam);
+    if(v.z>1) continue;                                   // behind the camera
+    const sx=(v.x*0.5+0.5)*rect.width, sy=(-v.y*0.5+0.5)*rect.height;
+    const d=Math.hypot(sx-cx, sy-cy);
+    if(d<bestD){ bestD=d; best=mk; }
+  }
+  if(best && bestD<=42){ if(best.userData.boneName!==selBoneName) selectBone(best.userData.boneName); e.preventDefault(); return; }  // already selected -> leave the gizmo grab intact
+  setNdc(e); ray.setFromCamera(ndc, activeCam);          // fall back: double-click a weapon selects it
+  for(const w of c.weapons){ if(ray.intersectObject(w.object,true).length){ selectWeapon(w.id); return; } }
+});
+
+// ============================================================ readout
+function updateReadout(e){
+  const c=activeChar();
+  let html='';
+  const b=boneByName(c, selBoneName);
+  if(b){ const bw=new THREE.Vector3(); b.getWorldPosition(bw);
+    html+=`<span class="am">${selBoneName}</span>  <span class="hl">${fmt(bw.x)} ${fmt(bw.y)} ${fmt(bw.z)}</span><br>`; }
+  const w=selWeapon();
+  if(w){ const ap=attachPoint(c,w); html+=`attach  <span class="am">${fmt(ap[0])} ${fmt(ap[1])} ${fmt(ap[2])}</span>`; }
+  if(!html) html='<span style="color:var(--dim2)">load a character to begin</span>';
+  $('#vp-readout').innerHTML=html;
+}
+
+// ============================================================ camera framing & directions
+function charBBox(c){
+  const box=new THREE.Box3();
+  c.root.traverse(o=>{ if(o.isMesh && !o.userData.isAnchor) box.expandByObject(o); });
+  if(box.isEmpty()){ box.setFromCenterAndSize(new THREE.Vector3(0,1,0), new THREE.Vector3(1,2,1)); }
+  return box;
+}
+function frameCharacter(c){
+  const box=charBBox(c); const center=new THREE.Vector3(); box.getCenter(center);
+  const size=new THREE.Vector3(); box.getSize(size);
+  const r=Math.max(size.x,size.y,size.z)*0.75+0.2;
+  orbit.target.copy(center);
+  perspCam.position.set(center.x+r*1.1, center.y+r*0.5, center.z+r*2.0);
+  perspCam.near=0.01; perspCam.far=r*40; perspCam.updateProjectionMatrix();
+  orbit.update();
+}
+
+const DIR_AZ={ S:0, SE:45, E:90, NE:135, N:180, NW:225, W:270, SW:315 };
+function setCameraDir(dir){
+  cameraDir=dir;
+  if(dir==='Free'){ activeCam=perspCam; orbit.enabled=true; tc.camera=perspCam; updateModeBadge(); refreshToolbarCam(); return; }
+  const c=activeChar(); if(!c){ toast('Load a character'); return; }
+  const box=charBBox(c); const center=new THREE.Vector3(); box.getCenter(center);
+  const size=new THREE.Vector3(); box.getSize(size);
+  const az=DIR_AZ[dir]*Math.PI/180, el=elevationDeg*Math.PI/180;
+  const dist=Math.max(size.x,size.y,size.z)*3+2;
+  const pos=new THREE.Vector3(
+    center.x + dist*Math.cos(el)*Math.sin(az),
+    center.y + dist*Math.sin(el),
+    center.z + dist*Math.cos(el)*Math.cos(az)
+  );
+  orthoCam.position.copy(pos); orthoCam.up.set(0,1,0); orthoCam.lookAt(center);
+  const half=Math.max(size.y, Math.max(size.x,size.z))*0.62+0.1;
+  orthoCam.left=-half*aspect; orthoCam.right=half*aspect; orthoCam.top=half; orthoCam.bottom=-half;
+  orthoCam.near=-50; orthoCam.far=100; orthoCam.updateProjectionMatrix();
+  activeCam=orthoCam; orbit.enabled=false; tc.camera=orthoCam;
+  updateModeBadge(); refreshToolbarCam();
+}
+function updateModeBadge(){
+  const m=$('#vp-mode');
+  if(cameraDir!=='Free'){ m.classList.add('show'); m.textContent=`${cameraDir} · ortho · ${elevationDeg}° elevation`; }
+  else m.classList.remove('show');
+}
+
+// ============================================================ silhouette + contact sheet
+// ============================================================ view system (skeleton / mesh / ghost) + silhouette
+function applyVisibility(){
+  scene.overrideMaterial = silhouetteOn ? SILH_GREY : null;
+  grid.visible=!silhouetteOn; axes.visible=!silhouetteOn;
+  const op = viewMode==='skeleton'?0.15 : viewMode==='ghost'?0.4 : 1.0;
+  CHARS.forEach(c=>{
+    c.root.traverse(o=>{
+      if(o.userData.charBody && o.material){
+        const ms=Array.isArray(o.material)?o.material:[o.material];
+        ms.forEach((mm,i)=>{
+          if(op<1){ if(!mm.transparent){ mm.transparent=true; mm.needsUpdate=true; } mm.opacity=op; mm.depthWrite=false; }
+          else { const b=(o.userData._matBase&&o.userData._matBase[i])||{t:false,o:1,d:true}; if(mm.transparent!==b.t){ mm.transparent=b.t; mm.needsUpdate=true; } mm.opacity=b.o; mm.depthWrite=b.d; }
+        });
+      }
+    });
+    if(c.helper) c.helper.visible = (c.id===activeCharId) && !silhouetteOn && (viewMode!=='mesh');
+    c.jointMarkers.forEach(mk=>{ mk.visible = !silhouetteOn; });
+  });
+  if(refPlane) refPlane.visible = refVisible && !silhouetteOn && !!refPlane.material.map;
+}
+function setBodyBase(){ // force full-mesh appearance (for contact-sheet render)
+  CHARS.forEach(c=>c.root.traverse(o=>{ if(o.userData.charBody && o.material){
+    const ms=Array.isArray(o.material)?o.material:[o.material];
+    ms.forEach((mm,i)=>{ const b=(o.userData._matBase&&o.userData._matBase[i])||{t:false,o:1,d:true}; if(mm.transparent!==b.t){ mm.transparent=b.t; mm.needsUpdate=true; } mm.opacity=b.o; mm.depthWrite=b.d; }); } }));
+}
+function setView(v){ viewMode=v; $$('#viewSeg button').forEach(b=>b.classList.toggle('on',b.dataset.view===v)); applyVisibility(); persistSoon(); }
+function cycleView(){ const order=['skeleton','mesh','ghost']; setView(order[(order.indexOf(viewMode)+1)%order.length]); }
+
+// ============================================================ concept reference image plane
+function loadReferenceImage(url){
+  new THREE.TextureLoader().load(url, tex=>{
+    tex.colorSpace=THREE.SRGBColorSpace;
+    if(!refPlane){
+      refPlane=new THREE.Mesh(new THREE.PlaneGeometry(1,1), new THREE.MeshBasicMaterial({map:tex,transparent:true,opacity:refOpacity,depthWrite:false,toneMapped:false,side:THREE.DoubleSide}));
+      refPlane.renderOrder=-1; scene.add(refPlane);
+    } else { if(refPlane.material.map) refPlane.material.map.dispose(); refPlane.material.map=tex; refPlane.material.needsUpdate=true; }
+    refPlane.userData.aspect=(tex.image&&tex.image.width)?tex.image.width/tex.image.height:0.65;
+    refVisible=true; positionRefPlane(); applyVisibility(); updateRefUI(); toast('Reference loaded');
+  }, undefined, ()=>toast('Could not load image'));
+}
+function positionRefPlane(){
+  if(!refPlane) return;
+  let center=new THREE.Vector3(0,1,0), h=2, zback=-0.6;
+  const c=activeChar();
+  if(c){ const box=charBBox(c); box.getCenter(center); const size=new THREE.Vector3(); box.getSize(size);
+    h=Math.max(size.y,0.5)*1.06; zback=box.min.z-0.06; }
+  const asp=refPlane.userData.aspect||0.65; refPlane.scale.set(h*asp, h, 1);
+  refPlane.position.set(center.x, center.y, zback); refPlane.quaternion.identity(); // faces +Z (the S / front camera)
+}
+function updateRefUI(){
+  const ctl=$('#refCtl'); if(!ctl) return;
+  if(refPlane && refPlane.material.map){ ctl.classList.remove('hidden'); $('#togRef').classList.toggle('on',refVisible); $('#refOp').value=Math.round(refOpacity*100); }
+  else ctl.classList.add('hidden');
+}
+
+// ============================================================ pose reset
+function resetBone(name){
+  const c=activeChar(); if(!c) return; const b=boneByName(c,name); const r=c.rest&&c.rest[name];
+  if(b&&r){ b.quaternion.fromArray(r.q); b.position.fromArray(r.p); renderInspector(); persistSoon(); toast('Bone reset'); }
+}
+function resetPose(){
+  const c=activeChar(); if(!c||!c.rest) return;
+  c.bones.forEach(b=>{ const r=c.rest[b.name]; if(r){ b.quaternion.fromArray(r.q); b.position.fromArray(r.p); } });
+  renderInspector(); persistSoon(); toast('Pose reset');
+}
+
+function applySilhouette(){ applyVisibility(); } // back-compat alias
+
+function renderContactSheet(){
+  const c=activeChar(); if(!c){ toast('Load a character'); return; }
+  const cell=240, pad=8, cols=3, rows=3;
+  const W=cols*cell+(cols+1)*pad, H=rows*cell+(rows+1)*pad;
+  const out=$('#sheetCanvas'); out.width=W; out.height=H;
+  const ctx=out.getContext('2d');
+  ctx.fillStyle='#0b0b0d'; ctx.fillRect(0,0,W,H);
+
+  // dedicated square ortho render
+  const prevCam=activeCam, prevDir=cameraDir, prevSil=silhouetteOn;
+  const prevW=renderer.domElement.width, prevH=renderer.domElement.height;
+  renderer.setSize(cell, cell, false);
+  const box=charBBox(c), center=new THREE.Vector3(); box.getCenter(center);
+  const size=new THREE.Vector3(); box.getSize(size);
+  const half=Math.max(size.y, Math.max(size.x,size.z))*0.62+0.1;
+  const cam=new THREE.OrthographicCamera(-half,half,half,-half,-50,100);
+  const grid0=grid.visible, axes0=axes.visible, ring0=snapRing.visible, tc0=tc.visible, helpers=CHARS.map(x=>x.helper&&x.helper.visible);
+  grid.visible=false; axes.visible=false; snapRing.visible=false; tc.visible=false;
+  CHARS.forEach(x=>{ if(x.helper) x.helper.visible=false; x.jointMarkers.forEach(mk=>mk.visible=false); });
+  setBodyBase();                                  // full mesh, ignore skeleton/ghost opacity
+  const refV=refPlane&&refPlane.visible; if(refPlane) refPlane.visible=false;
+
+  const layout={ NW:[0,0],N:[1,0],NE:[2,0], W:[0,1],FREE:[1,1],E:[2,1], SW:[0,2],S:[1,2],SE:[2,2] };
+  const el=elevationDeg*Math.PI/180;
+  const dist=Math.max(size.x,size.y,size.z)*3+2;
+  Object.keys(layout).forEach(dir=>{
+    const [cx,cy]=layout[dir];
+    const px=pad+cx*(cell+pad), py=pad+cy*(cell+pad);
+    if(dir==='FREE'){
+      ctx.fillStyle='#141418'; ctx.fillRect(px,py,cell,cell);
+      ctx.fillStyle='#5a5a64'; ctx.font='600 13px ui-monospace,monospace'; ctx.textAlign='center';
+      ctx.fillText('— free —', px+cell/2, py+cell/2);
+      return;
+    }
+    const az=DIR_AZ[dir]*Math.PI/180;
+    cam.position.set(center.x+dist*Math.cos(el)*Math.sin(az), center.y+dist*Math.sin(el), center.z+dist*Math.cos(el)*Math.cos(az));
+    cam.up.set(0,1,0); cam.lookAt(center); cam.updateProjectionMatrix();
+    renderer.render(scene, cam);
+    ctx.drawImage(renderer.domElement, px, py, cell, cell);
+    ctx.strokeStyle='#2c2c34'; ctx.lineWidth=1; ctx.strokeRect(px+.5,py+.5,cell-1,cell-1);
+    ctx.fillStyle='rgba(14,14,17,.8)'; ctx.fillRect(px+6,py+6,38,18);
+    ctx.fillStyle='#f0a830'; ctx.font='600 12px ui-monospace,monospace'; ctx.textAlign='left';
+    ctx.fillText(dir, px+11, py+19);
+  });
+
+  // restore
+  grid.visible=grid0; axes.visible=axes0; snapRing.visible=ring0; tc.visible=tc0;
+  CHARS.forEach((x,i)=>{ if(x.helper) x.helper.visible=helpers[i]; });
+  if(refPlane) refPlane.visible=refV;
+  applyVisibility();                              // restore current view (body opacity, markers, helper, ref)
+  renderer.setSize(prevW/renderer.getPixelRatio(), prevH/renderer.getPixelRatio(), false);
+  resize();
+  $('#sheet').classList.add('show');
+}
+
+// ============================================================ GLB loading
+const loader=new GLTFLoader();
+function loadGLBFromBuffer(buf, name, isWeapon, cb){
+  loader.parse(buf, '', (gltf)=>{
+    if(isWeapon){
+      const asset=addLibAssetFromObject(name, gltf.scene, buf);
+      cb&&cb(asset);
+    } else {
+      const root=gltf.scene;
+      const bones=[];
+      root.traverse(o=>{ if(o.isBone) bones.push(o); });
+      if(!bones.length){ // fallback: treat all named nodes as pseudo-bones? require a skeleton
+        toast('No bones found in GLB'); return;
+      }
+      const rec=finalizeCharacter(name, root, bones, false);
+      glbCache[rec.id]=buf;
+      cb&&cb(rec);
+    }
+  }, (err)=>{ console.error(err); toast('Failed to parse GLB'); });
+}
+function addLibAssetFromObject(name, object, buf){
+  const dt=defaultTipFor(object);
+  const asset={ id:'l'+(++LID), name, _object:object, isBox:false, gripLocal:dt.grip.slice(), tipLocal:dt.tip.slice() };
+  if(buf) glbCache['lib_'+asset.id]=buf;
+  LIB.push(asset); return asset;
+}
+
+// ============================================================ export
+// pose block: per bone that differs from rest, local rotation delta (q, for editor restore)
+// + bone transform relative to the character root (world.p/world.q, the bridge-robust form)
+function poseForChar(c){
+  c.root.updateMatrixWorld(true);
+  const rootInv=new THREE.Matrix4().copy(c.root.matrixWorld).invert();
+  const bones={};
+  c.bones.forEach(b=>{
+    const rest=c.rest&&c.rest[b.name];
+    let qrel=[0,0,0,1], include=true;
+    if(rest){
+      const rq=new THREE.Quaternion().fromArray(rest.q);
+      const rel=rq.clone().invert().multiply(b.quaternion.clone());
+      qrel=[r4(rel.x),r4(rel.y),r4(rel.z),r4(rel.w)];
+      const angle=2*Math.acos(Math.min(1,Math.abs(rel.w)));
+      const moved = rest.p && (Math.abs(b.position.x-rest.p[0])>1e-4||Math.abs(b.position.y-rest.p[1])>1e-4||Math.abs(b.position.z-rest.p[2])>1e-4);
+      include = angle>0.0017 || moved;   // omit bones left at rest (~0.1°)
+    }
+    if(!include) return;
+    const m=new THREE.Matrix4().multiplyMatrices(rootInv, b.matrixWorld);
+    const wp=new THREE.Vector3(), wq=new THREE.Quaternion(), ws=new THREE.Vector3(); m.decompose(wp,wq,ws);
+    bones[b.name]={ q:qrel, world:{ p:[r4(wp.x),r4(wp.y),r4(wp.z)], q:[r4(wq.x),r4(wq.y),r4(wq.z),r4(wq.w)] } };
+  });
+  return { space:'gltf-y-up', bones };
+}
+function placementForChar(c){
+  return {
+    skeleton: c.name.replace(/\s*\(.*\)$/,''),
+    facing: '-Y',
+    pose: poseForChar(c),
+    weapons: c.weapons.map(w=>{
+      return {
+        asset:w.asset, bone:w.bone,
+        rootTransform: rootTransformOf(c,w),
+        attachPoint: attachPoint(c,w),
+        tipPoint: tipPoint(c,w),
+        boneLocal:{
+          position:[r4(w.object.position.x),r4(w.object.position.y),r4(w.object.position.z)],
+          quaternion:[r4(w.object.quaternion.x),r4(w.object.quaternion.y),r4(w.object.quaternion.z),r4(w.object.quaternion.w)],
+          scale:r4(w.object.scale.x)
+        },
+        gripLocal:w.gripLocal.map(r4), tipLocal:w.tipLocal.map(r4)
+      };
+    })
+  };
+}
+function download(obj, filename){
+  const blob=new Blob([JSON.stringify(obj,null,2)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),500);
+}
+function exportSingle(){
+  const c=activeChar(); if(!c){ toast('Load a character'); return; }
+  download(Object.assign({format:'sprite-motion.placement', version:4, space:'gltf-y-up'}, placementForChar(c)), 'sprite-motion.placement.json');
+  toast('Exported placement');
+}
+function exportAll(){
+  if(!CHARS.length){ toast('Nothing to export'); return; }
+  download({format:'sprite-motion.placements', version:4, space:'gltf-y-up', characters:CHARS.map(placementForChar)}, 'sprite-motion.placements.json');
+  toast('Exported roster');
+}
+
+// ============================================================ project save / load / autosave
+function serializeProject(){
+  return {
+    format:'sprite-motion.project3d', version:4, activeCharId, viewMode,
+    presets:PRESETS.map(p=>JSON.parse(JSON.stringify(p))),
+    library:LIB.map(l=>({ id:l.id, name:l.name, isBox:!!l.isBox, gripLocal:l.gripLocal, tipLocal:l.tipLocal,
+      glb: glbCache['lib_'+l.id]? bufToB64(glbCache['lib_'+l.id]) : null })),
+    characters:CHARS.map(c=>({
+      id:c.id, name:c.name, isDemo:c.isDemo, selectedBone:c.selectedBone,
+      pose: serializeCharPose(c),
+      glb: glbCache[c.id]? bufToB64(glbCache[c.id]) : null,
+      weapons:c.weapons.map(w=>({ id:w.id, libId:w.libId, asset:w.asset, bone:w.bone,
+        position:[r4(w.object.position.x),r4(w.object.position.y),r4(w.object.position.z)],
+        quaternion:[r4(w.object.quaternion.x),r4(w.object.quaternion.y),r4(w.object.quaternion.z),r4(w.object.quaternion.w)],
+        scale:r4(w.object.scale.x), gripLocal:w.gripLocal.map(r4), tipLocal:w.tipLocal.map(r4) }))
+    }))
+  };
+}
+function bufToB64(buf){ let bin=''; const b=new Uint8Array(buf); for(let i=0;i<b.length;i++) bin+=String.fromCharCode(b[i]); return btoa(bin); }
+// pose state object: bone-name -> absolute local {q,p}, only for bones moved off rest (exact editor round-trip;
+// kept as a flat map so a future keyframe layer can hold several named poses + a timeline)
+function serializeCharPose(c){
+  const out={};
+  c.bones.forEach(b=>{
+    const rest=c.rest&&c.rest[b.name]; if(!rest) return;
+    const dq=Math.abs(b.quaternion.x-rest.q[0])+Math.abs(b.quaternion.y-rest.q[1])+Math.abs(b.quaternion.z-rest.q[2])+Math.abs(b.quaternion.w-rest.q[3]);
+    const dp=Math.abs(b.position.x-rest.p[0])+Math.abs(b.position.y-rest.p[1])+Math.abs(b.position.z-rest.p[2]);
+    if(dq>1e-4||dp>1e-4) out[b.name]={ q:b.quaternion.toArray().map(r4), p:b.position.toArray().map(r4) };
+  });
+  return out;
+}
+function applyPoseToRec(rec, pose){
+  if(!pose||!rec) return;
+  Object.keys(pose).forEach(name=>{
+    const b=rec.bones.find(x=>x.name===name); if(!b) return;
+    const pe=pose[name]; if(pe.q) b.quaternion.fromArray(pe.q); if(pe.p) b.position.fromArray(pe.p);
+  });
+  rec.root.updateMatrixWorld(true);
+}
+function b64ToBuf(s){ const bin=atob(s); const b=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) b[i]=bin.charCodeAt(i); return b.buffer; }
+
+let persistT=0;
+function persistSoon(){ clearTimeout(persistT); persistT=setTimeout(autosave, 600); }
+function autosave(){
+  try{ localStorage.setItem('sprite-motion-3d', JSON.stringify(serializeProject())); }
+  catch(e){ /* quota (large GLBs) — skip silently */ }
+}
+
+function clearAll(){
+  CHARS.slice().forEach(c=>removeCharacter(c.id));
+  CHARS=[]; LIB=[]; activeCharId=null; selBoneName=null; selWeaponId=null; tc.detach();
+  CID=0;LID=0;WID=0; for(const k in glbCache) delete glbCache[k];
+}
+
+function deserializeProject(data, done){
+  clearAll();
+  PRESETS=(data.presets&&data.presets.length)?data.presets.map(p=>JSON.parse(JSON.stringify(p))):BUILTIN_PRESETS.map(p=>JSON.parse(JSON.stringify(p)));
+  // library
+  const libMap={};
+  let pending=0, finished=false;
+  function tryFinish(){ if(finished&&pending===0){ placeAllWeapons(); } }
+  (data.library||[]).forEach(l=>{
+    if(l.isBox || !l.glb){ const a=addLibAsset(l.name, makeBoxWeapon, true); a.gripLocal=l.gripLocal||a.gripLocal; a.tipLocal=l.tipLocal||a.tipLocal; libMap[l.id]=a; }
+    else { pending++; loader.parse(b64ToBuf(l.glb),'',(g)=>{ const a=addLibAssetFromObject(l.name,g.scene,b64ToBuf(l.glb)); a.gripLocal=l.gripLocal||a.gripLocal; a.tipLocal=l.tipLocal||a.tipLocal; libMap[l.id]=a; pending--; tryFinish(); }); }
+  });
+  // characters
+  const charDefs=data.characters||[];
+  let cpend=0;
+  const charRecs={};
+  function afterChars(){ if(cpend===0){ finished=true; tryFinish(); finalizeLoad(); } }
+  charDefs.forEach(cd=>{
+    if(cd.isDemo || !cd.glb){
+      const rec=buildDemoRig(); rec.name=cd.name||rec.name; rec._loadId=cd.id; rec.selectedBone=cd.selectedBone||null; applyPoseToRec(rec, cd.pose); charRecs[cd.id]=rec; rec._wdefs=cd.weapons||[];
+    } else {
+      cpend++; loader.parse(b64ToBuf(cd.glb),'',(g)=>{ const bones=[]; g.scene.traverse(o=>{if(o.isBone)bones.push(o);});
+        const rec=finalizeCharacter(cd.name, g.scene, bones, false); glbCache[rec.id]=b64ToBuf(cd.glb);
+        rec._loadId=cd.id; rec.selectedBone=cd.selectedBone||null; applyPoseToRec(rec, cd.pose); charRecs[cd.id]=rec; rec._wdefs=cd.weapons||[]; cpend--; afterChars(); });
+    }
+  });
+  function placeAllWeapons(){
+    Object.values(charRecs).forEach(rec=>{
+      (rec._wdefs||[]).forEach(wd=>{
+        const asset=libMap[wd.libId]||LIB[0]; if(!asset) return;
+        placeWeapon(asset, rec.id, wd.bone, { position:wd.position, quaternion:wd.quaternion, scale:wd.scale, gripLocal:wd.gripLocal, tipLocal:wd.tipLocal });
+      });
+      delete rec._wdefs;
+    });
+  }
+  function finalizeLoad(){
+    activeCharId = (data.activeCharId && charRecs[data.activeCharId]) ? charRecs[data.activeCharId].id : (CHARS[0]&&CHARS[0].id);
+    setActiveChar(activeCharId);
+    if(data.viewMode) setView(data.viewMode);
+    done&&done();
+  }
+  afterChars();
+}
+
+// ============================================================ render loop
+function resize(){
+  const r=$('#viewport').getBoundingClientRect();
+  aspect=r.width/r.height;
+  renderer.setSize(r.width, r.height, false);
+  perspCam.aspect=aspect; perspCam.updateProjectionMatrix();
+  if(cameraDir!=='Free') setCameraDir(cameraDir);
+}
+addEventListener('resize', resize);
+
+function tick(){
+  requestAnimationFrame(tick);
+  if(cameraDir==='Free') orbit.update();
+  // keep joint markers + anchor markers a roughly constant screen size
+  const camDist=activeCam.isOrthographicCamera ? (orthoCam.top-orthoCam.bottom) : null;
+  CHARS.forEach(c=>{
+    if(!c.root.visible) return;
+    c.jointMarkers.forEach(mk=>{
+      const wp=new THREE.Vector3(); mk.getWorldPosition(wp);
+      let s;
+      if(activeCam.isPerspectiveCamera){ s=wp.distanceTo(activeCam.position)*0.02; }
+      else { s=(orthoCam.top-orthoCam.bottom)*0.018; }
+      const ws=new THREE.Vector3(); mk.parent.getWorldScale(ws);
+      mk.scale.setScalar(clamp(s,0.006,0.2)/Math.max(ws.x,0.0001));
+      const sel=(c.id===activeCharId && mk.userData.boneName===selBoneName);
+      mk.material.color.setHex(sel?0xf0a830:0xcfd6dd);
+      mk.material.depthTest=!sel; mk.material.depthWrite=!sel;   // selected joint renders ON TOP (visible through the mesh)
+      mk.renderOrder=sel?999:20;
+      mk.scale.multiplyScalar(sel?2.4:1.0);
+    });
+  });
+  if(snapRing.visible) snapRing.quaternion.copy(activeCam.quaternion);
+  renderer.render(scene, activeCam);
+}
+
+// ============================================================ UI rendering
+function refreshAll(){ renderCharList(); renderBoneList(); renderLibList(); renderInspector(); renderPresetList(); updateCounts(); updateReadout({}); refreshToolbarCam(); }
+function updateCounts(){
+  $('#charCnt').textContent=CHARS.length;
+  const c=activeChar();
+  $('#boneCnt').textContent=c?c.bones.length:0;
+  $('#libCnt').textContent=LIB.length;
+  $('#preCnt').textContent=PRESETS.length;
+}
+function renderCharList(){
+  const el=$('#charList'); if(!CHARS.length){ el.innerHTML='<div class="empty">No characters. <b>Load demo rig</b> or <b>Load Character</b> (GLB).</div>'; return; }
+  el.innerHTML='';
+  CHARS.forEach(c=>{
+    const row=document.createElement('div'); row.className='listrow'+(c.id===activeCharId?' sel':'');
+    row.innerHTML=`<span class="swatch" style="background:${c.id===activeCharId?'#f0a830':'#5a5a64'}"></span>
+      <span class="nm">${esc(c.name)}</span><span class="sub">${c.weapons.length}w</span>
+      <button class="icbtn" data-del="${c.id}" title="remove">&#10005;</button>`;
+    row.addEventListener('click',e=>{ if(e.target.closest('[data-del]')) return; setActiveChar(c.id); });
+    row.querySelector('[data-del]').addEventListener('click',()=>removeCharacter(c.id));
+    el.appendChild(row);
+  });
+}
+let boneFilter='';
+function renderBoneList(){
+  const el=$('#boneList'); const c=activeChar();
+  if(!c){ el.innerHTML='<div class="empty" style="padding:8px">—</div>'; $('#selBoneName').textContent='—'; $('#selBonePos').textContent='—'; return; }
+  const f=boneFilter.toLowerCase();
+  el.innerHTML='';
+  c.bones.filter(b=>!f||b.name.toLowerCase().includes(f)).forEach(b=>{
+    const row=document.createElement('div'); row.className='brow'+(b.name===selBoneName?' sel':'');
+    const role=roleOf(b.name)==='hand'?'<span class="bx">hand</span>':'';
+    row.innerHTML=`<span class="jd"></span>${esc(b.name)}${role}`;
+    row.addEventListener('click',()=>{ selectBone(b.name); });
+    el.appendChild(row);
+  });
+  const b=boneByName(c,selBoneName);
+  $('#selBoneName').textContent=selBoneName||'—';
+  if(b){ const w=new THREE.Vector3(); b.getWorldPosition(w); $('#selBonePos').textContent=`${fmt(w.x)},${fmt(w.y)},${fmt(w.z)}`; }
+  else $('#selBonePos').textContent='—';
+}
+function renderLibList(){
+  const el=$('#libList');
+  if(!LIB.length){ el.innerHTML='<div class="empty">No weapons. <b>Load Weapon</b> (GLB) or add the demo box.</div>'; return; }
+  el.innerHTML='';
+  LIB.forEach(l=>{
+    const row=document.createElement('div'); row.className='listrow';
+    row.innerHTML=`<span class="swatch" style="background:#8a6a3a"></span><span class="nm">${esc(l.name)}</span>
+      <button class="icbtn" data-place="${l.id}" title="place on active character">+</button>`;
+    row.querySelector('[data-place]').addEventListener('click',()=>{
+      const c=activeChar(); if(!c){ toast('Load a character first'); return; }
+      const w=placeWeapon(l, c.id, selBoneName||resolveRole(c,'hand'));
+      if(w){ selectWeapon(w.id); persistSoon(); toast('Placed '+l.name); }
+    });
+    el.appendChild(row);
+  });
+}
+function renderPresetList(){
+  const el=$('#preList');
+  if(!PRESETS.length){ el.innerHTML='<div class="empty">No presets.</div>'; return; }
+  el.innerHTML='';
+  PRESETS.forEach((p,i)=>{
+    const row=document.createElement('div'); row.className='listrow';
+    row.innerHTML=`<span class="nm" style="font-family:var(--mono);font-size:11px">${esc(p.name)}</span>
+      <button class="icbtn" data-ap="${i}" title="apply to selected weapon">&#8594;</button>
+      <button class="icbtn" data-rn="${i}" title="rename">&#9998;</button>
+      <button class="icbtn" data-dl="${i}" title="delete">&#10005;</button>`;
+    row.querySelector('[data-ap]').addEventListener('click',()=>{ const w=selWeapon(); if(!w){toast('Select a weapon');return;} applyPreset(w,PRESETS[i]); refreshAll(); persistSoon(); toast('Applied preset'); });
+    row.querySelector('[data-rn]').addEventListener('click',()=>{ const n=prompt('Rename preset:',PRESETS[i].name); if(n&&n.trim()){PRESETS[i].name=n.trim(); renderPresetList(); persistSoon();} });
+    row.querySelector('[data-dl]').addEventListener('click',()=>{ if(confirm('Delete preset "'+PRESETS[i].name+'"?')){ PRESETS.splice(i,1); renderPresetList(); updateCounts(); persistSoon(); } });
+    el.appendChild(row);
+  });
+}
+
+function esc(s){ return String(s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m])); }
+
+// ---- inspector ----
+function renderInspector(){
+  const el=$('#inspector'); const c=activeChar(); const w=selWeapon();
+  if(!w){
+    if(!c){ el.innerHTML='<div class="empty">Load a character.</div>'; return; }
+    renderBoneInspector(el,c);
+    return;
+  }
+  const p=w.object.position, q=w.object.quaternion, s=w.object.scale.x;
+  const eu=new THREE.Euler().setFromQuaternion(q,'XYZ');
+  const deg=v=>(v*180/Math.PI);
+  const ap=attachPoint(c,w);
+  el.innerHTML=`
+    <div class="kv"><span class="k">asset</span><span class="v">${esc(w.asset)}</span></div>
+    <div class="kv" style="border-top:none"><span class="k">socket bone</span><span class="v amber" id="wBone">${esc(w.bone)}</span></div>
+
+    <div class="field" style="margin-top:10px"><label>position · bone-local</label>
+      <div class="axislab"><span>x</span><span>y</span><span>z</span></div>
+      <div class="triplet">
+        <input id="px" value="${r4(p.x)}"><input id="py" value="${r4(p.y)}"><input id="pz" value="${r4(p.z)}"></div></div>
+    <div class="field"><label>rotation · euler°</label>
+      <div class="axislab"><span>x</span><span>y</span><span>z</span></div>
+      <div class="triplet">
+        <input id="rx" value="${r4(deg(eu.x))}"><input id="ry" value="${r4(deg(eu.y))}"><input id="rz" value="${r4(deg(eu.z))}"></div></div>
+    <div class="rowflex"><label>scale</label><input type="range" id="scR" min="0.1" max="3" step="0.01" value="${s}"><input class="num" id="scN" value="${r4(s)}"></div>
+
+    <div class="field"><label>anchors · weapon-local</label>
+      <div class="anchor-row">
+        <button class="btn" id="armGrip"><span class="swatch" style="background:#f0a830"></span>Set grip</button>
+        <button class="btn tip" id="armTip"><span class="swatch" style="background:#7fd4e6"></span>Set tip</button>
+      </div>
+      <div class="kv"><span class="k">grip</span><span class="v amber">${w.gripLocal.map(r4).join(', ')}</span></div>
+      <div class="kv"><span class="k">tip</span><span class="v cyan">${w.tipLocal.map(r4).join(', ')}</span></div>
+    </div>
+
+    <div class="attachbox"><div class="lbl">resolved attach point · grip in char space</div>
+      <div class="val" id="apVal">${ap[0]}, ${ap[1]}, ${ap[2]}</div></div>
+
+    <div class="minibtns" style="display:flex;gap:6px;margin-top:10px">
+      <button class="btn" id="savePreset" style="flex:1;justify-content:center">Save preset…</button>
+      <button class="btn ghost" id="rmWeapon" style="justify-content:center">Remove</button>
+    </div>`;
+
+  // wire numeric fields
+  const upd=()=>{ syncInspectorLive(w); persistSoon(); };
+  ['px','py','pz'].forEach((id,i)=>{ const e=$('#'+id); e.addEventListener('change',()=>{ const v=parseFloat(e.value); if(!isNaN(v)){ w.object.position.setComponent(i,v); upd(); } }); });
+  ['rx','ry','rz'].forEach((id,i)=>{ const e=$('#'+id); e.addEventListener('change',()=>{
+    const ex=parseFloat($('#rx').value)||0, ey=parseFloat($('#ry').value)||0, ez=parseFloat($('#rz').value)||0;
+    w.object.quaternion.setFromEuler(new THREE.Euler(ex*Math.PI/180,ey*Math.PI/180,ez*Math.PI/180,'XYZ')); upd(); }); });
+  $('#scR').addEventListener('input',()=>{ const v=parseFloat($('#scR').value); w.object.scale.setScalar(v); $('#scN').value=r4(v); upd(); });
+  $('#scN').addEventListener('change',()=>{ const v=parseFloat($('#scN').value); if(!isNaN(v)&&v>0){ w.object.scale.setScalar(v); $('#scR').value=v; upd(); } });
+  $('#armGrip').addEventListener('click',()=>{ anchorMode=anchorMode==='grip'?null:'grip'; setArm(); });
+  $('#armTip').addEventListener('click',()=>{ anchorMode=anchorMode==='tip'?null:'tip'; setArm(); });
+  $('#savePreset').addEventListener('click',()=>{ const n=prompt('Preset name:', w.asset+' hold'); if(n&&n.trim()){ PRESETS.push(presetFromWeapon(w,n.trim())); renderPresetList(); updateCounts(); persistSoon(); toast('Saved preset'); } });
+  $('#rmWeapon').addEventListener('click',()=>removeWeapon(w.id));
+  setArm();
+}
+function setArm(){
+  const g=$('#armGrip'), t=$('#armTip'); if(g){ g.classList.toggle('armed', anchorMode==='grip'); }
+  if(t){ t.classList.toggle('armed', anchorMode==='tip'); }
+  const a=$('#vp-arm');
+  if(anchorMode){ a.classList.add('show'); a.textContent='Click the weapon mesh to set the '+anchorMode.toUpperCase()+' point  ·  Esc to cancel'; }
+  else a.classList.remove('show');
+}
+// lightweight live sync (no full re-render) during gizmo drag / field edits
+function syncInspectorLive(w){
+  const c=activeChar(); if(!c||!w) return;
+  const p=w.object.position, q=w.object.quaternion, s=w.object.scale.x;
+  const eu=new THREE.Euler().setFromQuaternion(q,'XYZ'); const deg=v=>r4(v*180/Math.PI);
+  const set=(id,v)=>{ const e=$('#'+id); if(e&&document.activeElement!==e) e.value=v; };
+  set('px',r4(p.x)); set('py',r4(p.y)); set('pz',r4(p.z));
+  set('rx',deg(eu.x)); set('ry',deg(eu.y)); set('rz',deg(eu.z));
+  set('scN',r4(s)); const sr=$('#scR'); if(sr&&document.activeElement!==sr) sr.value=s;
+  const wb=$('#wBone'); if(wb) wb.textContent=w.bone;
+  const ap=attachPoint(c,w); const av=$('#apVal'); if(av) av.textContent=`${ap[0]}, ${ap[1]}, ${ap[2]}`;
+  $('#selBoneName').textContent=selBoneName||'—';
+}
+
+// ---- bone posing inspector ----
+function renderBoneInspector(el,c){
+  const b=boneByName(c,selBoneName);
+  if(!b){ el.innerHTML='<div class="empty">Click a joint marker in the viewport (or a bone in the list) to pose it.</div>'; return; }
+  const isRoot=boneIsRoot(b);
+  const eu=new THREE.Euler().setFromQuaternion(b.quaternion,'XYZ'); const deg=v=>r4(v*180/Math.PI);
+  const p=b.position; const wp=new THREE.Vector3(); b.getWorldPosition(wp);
+  el.innerHTML=`
+    <div class="kv" style="border-top:none"><span class="k">posing bone</span><span class="v amber">${esc(b.name)}</span></div>
+    <div class="kv"><span class="k">world (x,y,z)</span><span class="v">${fmt(wp.x)},${fmt(wp.y)},${fmt(wp.z)}</span></div>
+    <div class="field" style="margin-top:10px"><label>rotation · local euler°</label>
+      <div class="axislab"><span>x</span><span>y</span><span>z</span></div>
+      <div class="triplet"><input id="brx" value="${deg(eu.x)}"><input id="bry" value="${deg(eu.y)}"><input id="brz" value="${deg(eu.z)}"></div></div>
+    ${isRoot?`<div class="field"><label>position · local · root</label>
+      <div class="axislab"><span>x</span><span>y</span><span>z</span></div>
+      <div class="triplet"><input id="bpx" value="${r4(p.x)}"><input id="bpy" value="${r4(p.y)}"><input id="bpz" value="${r4(p.z)}"></div></div>`:''}
+    <div class="minibtns">
+      <button class="btn" id="rstBone" style="flex:1;justify-content:center">Reset bone</button>
+      <button class="btn ghost" id="rstPose" style="flex:1;justify-content:center">Reset pose</button></div>
+    <div class="attachbox"><div class="lbl">socket for next weapon</div>
+      <div class="val">${esc(b.name)}</div></div>
+    <div class="empty" style="margin-top:8px">Rotate the gizmo at the joint to pose. Children + any attached weapon follow.</div>`;
+  ['brx','bry','brz'].forEach(id=>{ const e=$('#'+id); e.addEventListener('change',()=>{
+    const ex=parseFloat($('#brx').value)||0, ey=parseFloat($('#bry').value)||0, ez=parseFloat($('#brz').value)||0;
+    b.quaternion.setFromEuler(new THREE.Euler(ex*Math.PI/180,ey*Math.PI/180,ez*Math.PI/180,'XYZ')); persistSoon(); }); });
+  if(isRoot){ ['bpx','bpy','bpz'].forEach((id,i)=>{ const e=$('#'+id); e.addEventListener('change',()=>{ const v=parseFloat(e.value); if(!isNaN(v)){ b.position.setComponent(i,v); persistSoon(); } }); }); }
+  $('#rstBone').addEventListener('click',()=>resetBone(b.name));
+  $('#rstPose').addEventListener('click',resetPose);
+}
+// live sync of bone euler fields during gizmo drag
+function syncBoneInspectorLive(){
+  const c=activeChar(); const b=c&&boneByName(c,selBoneName); if(!b) return;
+  const eu=new THREE.Euler().setFromQuaternion(b.quaternion,'XYZ'); const deg=v=>r4(v*180/Math.PI);
+  const set=(id,v)=>{ const e=$('#'+id); if(e&&document.activeElement!==e) e.value=v; };
+  set('brx',deg(eu.x)); set('bry',deg(eu.y)); set('brz',deg(eu.z));
+  if(boneIsRoot(b)){ set('bpx',r4(b.position.x)); set('bpy',r4(b.position.y)); set('bpz',r4(b.position.z)); }
+}
+
+// ============================================================ toolbar wiring
+function refreshToolbarCam(){
+  $$('#dirSeg button').forEach(b=>b.classList.toggle('on', b.dataset.dir===cameraDir));
+  $('#btnFree').style.color = cameraDir==='Free' ? 'var(--amber)' : '';
+}
+$('#gizmoSeg').addEventListener('click',e=>{ const b=e.target.closest('[data-gz]'); if(!b||b.disabled) return; setGizmo(b.dataset.gz); });
+$('#viewSeg').addEventListener('click',e=>{ const b=e.target.closest('[data-view]'); if(b) setView(b.dataset.view); });
+$('#btnResetBone').addEventListener('click',()=>{ if(activeChar()&&selBoneName) resetBone(selBoneName); else toast('Select a bone'); });
+$('#btnResetPose').addEventListener('click',resetPose);
+$('#btnRef').addEventListener('click',()=>$('#fileRef').click());
+$('#fileRef').addEventListener('change',e=>{ const f=e.target.files[0]; if(!f) return; const u=URL.createObjectURL(f); loadReferenceImage(u); e.target.value=''; });
+$('#togRef').addEventListener('click',()=>{ refVisible=!refVisible; applyVisibility(); updateRefUI(); });
+$('#refOp').addEventListener('input',()=>{ refOpacity=parseInt($('#refOp').value)/100; if(refPlane) refPlane.material.opacity=refOpacity; });
+$('#togSnap').addEventListener('click',()=>{ snapOn=!snapOn; $('#togSnap').classList.toggle('on',snapOn); if(!snapOn) clearSnapRing(); });
+$('#togSil').addEventListener('click',()=>{ silhouetteOn=!silhouetteOn; $('#togSil').classList.toggle('on',silhouetteOn); applySilhouette(); });
+$('#btnFree').addEventListener('click',()=>setCameraDir('Free'));
+$('#dirSeg').addEventListener('click',e=>{ const b=e.target.closest('[data-dir]'); if(b) setCameraDir(b.dataset.dir); });
+$('#elevRange').addEventListener('input',()=>{ elevationDeg=parseInt($('#elevRange').value); $('#elevNum').value=elevationDeg+'°'; if(cameraDir!=='Free') setCameraDir(cameraDir); updateModeBadge(); });
+$('#elevNum').addEventListener('change',()=>{ const v=clamp(parseInt($('#elevNum').value)||35,30,45); elevationDeg=v; $('#elevRange').value=v; $('#elevNum').value=v+'°'; if(cameraDir!=='Free') setCameraDir(cameraDir); updateModeBadge(); });
+$('#btnSheet').addEventListener('click',renderContactSheet);
+$('#btnSheetClose').addEventListener('click',()=>$('#sheet').classList.remove('show'));
+$('#btnSheetDl').addEventListener('click',()=>{ const a=document.createElement('a'); a.href=$('#sheetCanvas').toDataURL('image/png'); a.download='sprite-motion.contact-sheet.png'; a.click(); });
+$('#btnExport').addEventListener('click',exportSingle);
+$('#btnDemo').addEventListener('click',()=>{ const rec=buildDemoRig(); addBoxIfNone(); setActiveChar(rec.id); persistSoon(); toast('Demo rig loaded'); });
+$('#btnSave').addEventListener('click',()=>{ download(serializeProject(),'sprite-motion.project.json'); });
+$('#btnLoadProj').addEventListener('click',()=>$('#fileProj').click());
+$('#btnLoadChar').addEventListener('click',()=>$('#fileChar').click());
+$('#btnLoadWeapon').addEventListener('click',()=>$('#fileWeapon').click());
+
+function addBoxIfNone(){ if(!LIB.some(l=>l.isBox)) addLibAsset('demo_box', makeBoxWeapon, true); refreshAll(); }
+
+$('#fileChar').addEventListener('change',e=>{ const f=e.target.files[0]; if(!f) return; f.arrayBuffer().then(buf=>loadGLBFromBuffer(buf, f.name.replace(/\.(glb|gltf)$/i,''), false, rec=>{ setActiveChar(rec.id); persistSoon(); toast('Character loaded'); })); e.target.value=''; });
+$('#fileWeapon').addEventListener('change',e=>{ const f=e.target.files[0]; if(!f) return; f.arrayBuffer().then(buf=>loadGLBFromBuffer(buf, f.name.replace(/\.(glb|gltf)$/i,''), true, asset=>{ refreshAll(); const c=activeChar(); if(c){ const w=placeWeapon(asset,c.id,selBoneName||resolveRole(c,'hand')); if(w) selectWeapon(w.id); } persistSoon(); toast('Weapon loaded'); })); e.target.value=''; });
+$('#fileProj').addEventListener('change',e=>{ const f=e.target.files[0]; if(!f) return; f.text().then(t=>{ try{ deserializeProject(JSON.parse(t), ()=>toast('Project loaded')); }catch(err){ console.error(err); toast('Invalid project file'); } }); e.target.value=''; });
+
+$('#boneSearch').addEventListener('input',e=>{ boneFilter=e.target.value; renderBoneList(); });
+
+// collapsible panels
+$$('.panel-h').forEach(h=>h.addEventListener('click',()=>h.parentElement.classList.toggle('collapsed')));
+
+// ============================================================ command palette
+let palItems=[], palIdx=0;
+function buildPalette(){
+  const c=activeChar(); const w=selWeapon();
+  const cmds=[];
+  const A=(l,g,run)=>cmds.push({l,g,run});
+  A('Load demo rig','scene',()=>{ const r=buildDemoRig(); addBoxIfNone(); setActiveChar(r.id); toast('Demo rig loaded'); });
+  A('Load Character (GLB)…','scene',()=>$('#fileChar').click());
+  A('Load Weapon (GLB)…','scene',()=>$('#fileWeapon').click());
+  A('Add demo box weapon','library',()=>{ addBoxIfNone(); toast('Box weapon in library'); });
+  A('Gizmo: Translate','gizmo',()=>setGizmo('translate'));
+  A('Gizmo: Rotate','gizmo',()=>setGizmo('rotate'));
+  A('Gizmo: Scale','gizmo',()=>setGizmo('scale'));
+  A(`Toggle snapping (${snapOn?'on':'off'})`,'view',()=>$('#togSnap').click());
+  A(`Toggle silhouette (${silhouetteOn?'on':'off'})`,'view',()=>$('#togSil').click());
+  A('View: Skeleton','view',()=>setView('skeleton'));
+  A('View: Mesh','view',()=>setView('mesh'));
+  A('View: Ghost','view',()=>setView('ghost'));
+  A('Reset selected bone','pose',()=>{ if(selBoneName) resetBone(selBoneName); else toast('Select a bone'); });
+  A('Reset pose (all bones to rest)','pose',resetPose);
+  A('Load concept reference (PNG)…','scene',()=>$('#fileRef').click());
+  if(refPlane&&refPlane.material.map) A(`Toggle reference (${refVisible?'on':'off'})`,'view',()=>$('#togRef').click());
+  ['N','NE','E','SE','S','SW','W','NW'].forEach(d=>A('Camera: '+d,'camera',()=>setCameraDir(d)));
+  A('Camera: Free orbit','camera',()=>setCameraDir('Free'));
+  A('Render contact sheet','verify',renderContactSheet);
+  if(w){
+    A('Set grip anchor (click mesh)','weapon',()=>{ anchorMode='grip'; setArm(); toast('Click the weapon to set grip'); });
+    A('Set tip anchor (click mesh)','weapon',()=>{ anchorMode='tip'; setArm(); toast('Click the weapon to set tip'); });
+    A('Save weapon preset…','weapon',()=>{ const n=prompt('Preset name:', w.asset+' hold'); if(n&&n.trim()){ PRESETS.push(presetFromWeapon(w,n.trim())); refreshAll(); persistSoon(); toast('Saved preset'); } });
+    A('Remove selected weapon','weapon',()=>removeWeapon(w.id));
+    PRESETS.forEach(p=>A('Apply preset: '+p.name,'preset',()=>{ applyPreset(w,p); refreshAll(); persistSoon(); toast('Applied preset'); }));
+  }
+  if(c){ c.bones.forEach(b=>A('Select bone: '+b.name,'bone',()=>selectBone(b.name))); }
+  LIB.forEach(l=>A('Place weapon: '+l.name,'library',()=>{ if(!c){toast('Load a character');return;} const ww=placeWeapon(l,c.id,selBoneName||resolveRole(c,'hand')); if(ww){selectWeapon(ww.id);persistSoon();} }));
+  A('Export JSON (single)','export',exportSingle);
+  A('Export all placements (roster)','export',exportAll);
+  A('Save project (.json)','export',()=>download(serializeProject(),'sprite-motion.project.json'));
+  A('Load project (.json)…','export',()=>$('#fileProj').click());
+  return cmds;
+}
+function setGizmo(m){ gizmoMode=m; applyGizmo(); }
+function openPalette(){ palItems=buildPalette(); palIdx=0; $('#palInput').value=''; renderPal(''); $('#palette').classList.add('show'); $('#palInput').focus(); }
+function closePalette(){ $('#palette').classList.remove('show'); }
+function fuzzy(q,s){ q=q.toLowerCase(); s=s.toLowerCase(); let i=0; for(const ch of s){ if(ch===q[i]) i++; if(i===q.length) return true; } return q.length===0; }
+function renderPal(q){
+  const list=$('#palList'); const f=palItems.filter(c=>fuzzy(q,c.l));
+  palItems._f=f; palIdx=Math.min(palIdx,Math.max(0,f.length-1));
+  if(!f.length){ list.innerHTML='<div class="pal-empty">No matching commands</div>'; return; }
+  list.innerHTML=f.map((c,i)=>`<div class="pal-item${i===palIdx?' active':''}" data-i="${i}">${esc(c.l)}<span class="g">${c.g}</span></div>`).join('');
+  $$('#palList .pal-item').forEach(it=>{ it.addEventListener('click',()=>{ runPal(+it.dataset.i); }); it.addEventListener('mousemove',()=>{ palIdx=+it.dataset.i; highlightPal(); }); });
+}
+function highlightPal(){ $$('#palList .pal-item').forEach((it,i)=>it.classList.toggle('active',i===palIdx)); }
+function runPal(i){ const f=palItems._f||[]; const cmd=f[i]; if(cmd){ closePalette(); cmd.run(); } }
+$('#palInput').addEventListener('input',e=>{ palIdx=0; renderPal(e.target.value); });
+$('#palInput').addEventListener('keydown',e=>{
+  const f=palItems._f||[];
+  if(e.key==='ArrowDown'){ palIdx=Math.min(palIdx+1,f.length-1); highlightPal(); e.preventDefault(); }
+  else if(e.key==='ArrowUp'){ palIdx=Math.max(palIdx-1,0); highlightPal(); e.preventDefault(); }
+  else if(e.key==='Enter'){ runPal(palIdx); }
+  else if(e.key==='Escape'){ closePalette(); }
+});
+$('#palette').addEventListener('mousedown',e=>{ if(e.target.id==='palette') closePalette(); });
+
+// global keys
+addEventListener('keydown',e=>{
+  if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='k'){ e.preventDefault(); openPalette(); return; }
+  const tag=(e.target.tagName||'').toLowerCase(); if(tag==='input'||tag==='textarea') return;
+  if(e.key==='Escape'){ if(anchorMode){ anchorMode=null; setArm(); } closePalette(); }
+  const k=e.key.toLowerCase();
+  if(k==='g'||k==='1') setGizmo('translate');
+  else if(k==='r'||k==='2') setGizmo('rotate');
+  else if(k==='s'||k==='3') setGizmo('scale');
+  else if(k==='v') cycleView();
+});
+// double right-click opens palette; single right-click stays free (just suppress browser menu)
+let lastCtx=0;
+addEventListener('contextmenu',e=>{ e.preventDefault(); const now=Date.now(); if(now-lastCtx<400){ openPalette(); } lastCtx=now; });
+
+// ============================================================ boot
+function boot(){
+  resize();
+  let restored=false;
+  try{ const raw=localStorage.getItem('sprite-motion-3d'); if(raw){ const data=JSON.parse(raw); if(data&&(data.characters||[]).length){ deserializeProject(data); restored=true; } } }catch(e){ console.warn('restore failed',e); }
+  if(!restored){ const rec=buildDemoRig(); addBoxIfNone(); setActiveChar(rec.id); }
+  applySilhouette(); refreshAll(); updateModeBadge();
+  tick();
+}
+boot();
+window.__sm = { CHARS, LIB, PRESETS, attachPoint, tipPoint, rootTransformOf, poseForChar, activeChar, selWeapon, selectBone, resetPose, setView, setGizmo, loadReferenceImage, placementForChar, serializeProject, setCameraDir, get sel(){return {selBoneName,selWeaponId,cameraDir,viewMode,gizmoMode};} };
+</script>
+</body>
+</html>
