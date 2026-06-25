@@ -1,0 +1,22 @@
+{
+  "format": "sprite-motion.placements",
+  "version": 2,
+  "characters": [
+    {
+      "skeleton": "blackguard_dec_rigged",
+      "facing": "-Y",
+      "sprite": { "cx": 0.0, "cz": 0.0, "height": 1.18 },
+      "weapons": [
+        {
+          "asset": "halberd",
+          "bone": "bone_9",
+          "offset": [0.018, -0.01],
+          "gripAnchor": [0.5, 0.6],
+          "rotationDeg": 0,
+          "scale": 1.2,
+          "attachPoint": [0.2472, 0.009, 0.0191]
+        }
+      ]
+    }
+  ]
+}

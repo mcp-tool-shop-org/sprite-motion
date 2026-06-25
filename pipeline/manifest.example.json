@@ -1,0 +1,9 @@
+{
+  "_note": "Maps the editor's skeleton names + weapon asset names to the rigged GLBs on disk. Used with the roster ('Export all placements') path: blender -b --python apply_placement.py -- --placement placements.json --manifest manifest.json --outdir out/",
+  "characters": {
+    "blackguard_dec_rigged": "path/to/blackguard_dec_rigged.glb"
+  },
+  "weapons": {
+    "halberd": "path/to/halberd.glb"
+  }
+}

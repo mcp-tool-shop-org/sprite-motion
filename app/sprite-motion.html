@@ -43,8 +43,55 @@
   .tog.on .dot{background:var(--amber)}
 
   /* ---- body ---- */
-  .body{display:grid;grid-template-columns:1fr 288px;min-height:0}
-  .stage{position:relative;min-width:0;overflow:hidden;background:
+  .body{display:grid;grid-template-columns:212px 1fr 288px;grid-template-rows:1fr auto;min-height:0}
+  .body.charcollapsed{grid-template-columns:38px 1fr 288px}
+
+  /* ---- characters panel (left) ---- */
+  .charpanel{grid-column:1;grid-row:1 / 3;background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;min-height:0;overflow:hidden}
+  .panel-h{display:flex;align-items:center;gap:6px;padding:9px 10px;border-bottom:1px solid var(--border);flex:0 0 auto}
+  .panel-h .ttl{font-size:10px;letter-spacing:1.2px;text-transform:uppercase;color:var(--dim2);font-weight:600;flex:1;white-space:nowrap;overflow:hidden}
+  .panel-h .cnt{font-size:10px;color:var(--dim2);font-family:var(--mono)}
+  .icbtn{width:22px;height:22px;flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;background:#26262e;border:1px solid var(--border);border-radius:4px;color:var(--text);cursor:pointer;font-size:13px;line-height:1;padding:0}
+  .icbtn:hover{background:#30303a}
+  .charpanel.collapsed .panel-h .ttl,.charpanel.collapsed .charlist,.charpanel.collapsed .characts,.charpanel.collapsed .tray{display:none}
+  .characts{display:flex;flex-direction:column;gap:5px;padding:8px 10px;border-bottom:1px solid var(--border)}
+  .charlist{flex:1;overflow-y:auto;padding:6px}
+  .charcard{display:flex;align-items:center;gap:8px;padding:6px;border:1px solid transparent;border-radius:6px;cursor:pointer;margin-bottom:3px}
+  .charcard:hover{background:#22222a}
+  .charcard.active{background:#26262e;border-color:#3a3a46;box-shadow:inset 2px 0 0 var(--amber)}
+  .charcard .thumb{width:34px;height:42px;flex:0 0 auto;border:1px solid var(--border);border-radius:4px;background:#15151a center/contain no-repeat;display:flex;align-items:center;justify-content:center;overflow:hidden}
+  .charcard .thumb img{width:100%;height:100%;object-fit:contain;display:block}
+  .charcard .meta{flex:1;min-width:0}
+  .charcard .nm{font-size:12px;color:var(--text);font-family:var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .charcard .nm input{width:100%;background:#16161a;border:1px solid var(--amber);border-radius:3px;color:var(--text);font-family:var(--mono);font-size:12px;padding:1px 4px}
+  .charcard .sub{font-size:10px;color:var(--dim2);font-family:var(--mono);margin-top:2px}
+  .charcard .x{opacity:0;width:18px;height:18px;flex:0 0 auto;border:none;background:transparent;color:var(--dim2);cursor:pointer;border-radius:3px;font-size:13px}
+  .charcard:hover .x{opacity:1}
+  .charcard .x:hover{background:#3a2a2e;color:#e88}
+  .tray{padding:8px 10px;border-top:1px solid var(--border)}
+  .tray .lbl{font-size:9.5px;letter-spacing:.5px;text-transform:uppercase;color:var(--dim2);margin-bottom:6px}
+  .traytiles{display:flex;flex-wrap:wrap;gap:5px}
+  .traytile{width:38px;height:46px;border:1px solid var(--border);border-radius:4px;background:#15151a center/contain no-repeat;cursor:pointer;position:relative}
+  .traytile.sel{border-color:var(--amber);box-shadow:0 0 0 1px var(--amber)}
+  .traytile .tn{position:absolute;left:0;right:0;bottom:0;font-size:7px;font-family:var(--mono);color:var(--dim);background:rgba(20,20,24,.8);text-align:center;white-space:nowrap;overflow:hidden;padding:1px}
+
+  /* ---- library panel (bottom strip) ---- */
+  .library{grid-column:2;grid-row:2;background:var(--panel);border-top:1px solid var(--border);display:flex;flex-direction:column;max-height:128px}
+  .library .panel-h{padding:7px 12px}
+  .libstrip{display:flex;gap:8px;padding:8px 12px;overflow-x:auto;align-items:flex-start;min-height:0}
+  .libtile{flex:0 0 auto;width:62px;cursor:grab;text-align:center;user-select:none}
+  .libtile .img{width:62px;height:62px;border:1px solid var(--border);border-radius:6px;background:repeating-conic-gradient(#23232a 0% 25%, #1c1c22 0% 50%) 50%/12px 12px;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative}
+  .libtile .img img{max-width:100%;max-height:100%;object-fit:contain;display:block;pointer-events:none}
+  .libtile.sel .img{border-color:var(--amber);box-shadow:0 0 0 1px var(--amber)}
+  .libtile .nm{font-size:10px;color:var(--dim);font-family:var(--mono);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .libtile .x{position:absolute;top:2px;right:2px;width:16px;height:16px;border:none;background:rgba(20,20,24,.8);color:var(--dim2);border-radius:3px;cursor:pointer;font-size:11px;line-height:1;opacity:0;display:flex;align-items:center;justify-content:center}
+  .libtile:hover .x{opacity:1}
+  .libtile .x:hover{background:#3a2a2e;color:#e88}
+  .libempty{color:var(--dim2);font-size:11px;padding:4px 2px;align-self:center}
+  .stagewrap{grid-column:2;grid-row:1;position:relative;min-width:0;min-height:0}
+  .stagewrap.dropactive::after{content:"drop to place on character";position:absolute;inset:8px;border:2px dashed var(--amber);border-radius:8px;background:rgba(240,168,48,.06);display:flex;align-items:center;justify-content:center;color:var(--amber);font-family:var(--mono);font-size:13px;pointer-events:none;z-index:6}
+  .inspector{grid-column:3;grid-row:1 / 3}
+  .stage{position:relative;min-width:0;overflow:hidden;height:100%;background:
     radial-gradient(circle at 50% 42%, #1b1b21 0%, #141418 78%)}
   /* plot area is inset to leave fixed axis-ruler gutters (z=left, x=bottom) */
   svg.canvas{position:absolute;left:50px;top:0;width:calc(100% - 50px);height:calc(100% - 26px);display:block;touch-action:none;cursor:default}
@@ -152,6 +199,10 @@
   .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#26262e;border:1px solid var(--border);
     color:var(--text);font-size:12px;padding:9px 16px;border-radius:6px;z-index:40;opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;box-shadow:0 8px 24px rgba(0,0,0,.4)}
   .toast.show{opacity:1;transform:translateX(-50%) translateY(-4px)}
+  .restore{position:fixed;top:54px;left:50%;transform:translateX(-50%);z-index:45;background:#1d1d23;border:1px solid #3a3a46;
+    border-radius:8px;box-shadow:0 16px 48px rgba(0,0,0,.5);padding:10px 12px 10px 14px;display:flex;align-items:center;gap:12px;font-size:12.5px}
+  .restore b{color:var(--amber);font-weight:600}
+  .restore .sub{color:var(--dim2);font-size:11px;font-family:var(--mono)}
   ::-webkit-scrollbar{width:10px;height:10px}
   ::-webkit-scrollbar-thumb{background:#33333d;border-radius:6px;border:2px solid var(--panel)}
   ::-webkit-scrollbar-track{background:transparent}
@@ -162,12 +213,11 @@
   <div class="toolbar">
     <div class="brand"><b>sprite-motion</b><span>bone-space placement</span></div>
     <div class="tdiv"></div>
-    <button class="btn amber" id="btnSample" title="Load the embedded blackguard skeleton, sprite & halberd">Load blackguard sample</button>
+    <button class="btn amber" id="btnSample" title="Add the embedded blackguard skeleton, sprite & halberd as a character">Load blackguard sample</button>
     <button class="btn" id="btnLoadSkel">Load skeleton…</button>
     <button class="btn ghost" id="btnPaste">Paste JSON</button>
     <div class="tdiv"></div>
     <button class="btn" id="btnSprite">Upload sprite…</button>
-    <button class="btn" id="btnWeapon">Add weapon…</button>
     <div class="tspacer"></div>
     <div class="toggles" id="toggles">
       <button class="tog on" data-tg="grid"><span class="dot"></span>Grid</button>
@@ -176,11 +226,35 @@
       <button class="tog on" data-tg="bones"><span class="dot"></span>Bones</button>
     </div>
     <div class="tdiv"></div>
-    <button class="btn" id="btnExportSkel" title="Re-emit skeleton in input schema">Export skeleton</button>
-    <button class="btn amber" id="btnExport">Export JSON</button>
+    <button class="btn" id="btnSaveProj" title="Download the whole project (characters + library)">Save project</button>
+    <button class="btn ghost" id="btnLoadProj">Load project</button>
+    <div class="tdiv"></div>
+    <button class="btn ghost" id="btnExportSkel" title="Re-emit active skeleton in input schema">Export skeleton</button>
+    <button class="btn ghost" id="btnExportAll" title="One file with a block per character">Export all</button>
+    <button class="btn amber" id="btnExport" title="Active character placement (Blender bridge)">Export JSON</button>
   </div>
 
-  <div class="body">
+  <div class="body" id="body">
+    <div class="charpanel" id="charpanel">
+      <div class="panel-h">
+        <span class="ttl">Characters</span><span class="cnt" id="charCnt">0</span>
+        <button class="icbtn" id="charCollapse" title="Collapse panel">‹</button>
+      </div>
+      <div class="characts">
+        <button class="btn" id="btnAddChars" style="justify-content:center">+ Add character(s)…</button>
+        <div style="display:flex;gap:5px">
+          <button class="btn ghost" id="btnAddSampleChar" style="flex:1;justify-content:center;font-size:11px">Sample</button>
+          <button class="btn ghost" id="btnAssignSprites" style="flex:1;justify-content:center;font-size:11px">Sprites…</button>
+        </div>
+      </div>
+      <div class="charlist" id="charList"></div>
+      <div class="tray" id="tray" style="display:none">
+        <div class="lbl">Unassigned sprites · click a tile, then a character</div>
+        <div class="traytiles" id="trayTiles"></div>
+      </div>
+    </div>
+
+    <div class="stagewrap" id="stagewrap">
     <div class="stage" id="stage">
       <svg class="canvas" id="svg" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" preserveAspectRatio="xMidYMid meet"></svg>
       <div class="ruler-z" id="rulerZ"></div>
@@ -196,6 +270,16 @@
       <div class="scalebar" id="scalebar"><div class="bwrap"><span id="sbLabel">0.1</span><span class="bar" id="sbBar" style="width:40px"></span></div><div class="z" id="sbZoom">—</div></div>
       <div class="floatlabel" id="floatlabel" style="display:none"></div>
     </div>
+    </div>
+
+    <div class="library" id="libpanel">
+      <div class="panel-h">
+        <span class="ttl">Library</span><span class="cnt" id="libCnt">0</span>
+        <button class="btn ghost" id="btnAddProps" style="height:22px;font-size:11px;padding:0 8px">+ Add prop(s)…</button>
+      </div>
+      <div class="libstrip" id="libStrip"></div>
+    </div>
+
     <div class="inspector"><div id="insp"></div></div>
   </div>
 </div>
@@ -210,9 +294,13 @@
 
 <div class="toast" id="toast"></div>
 
-<input type="file" id="fileSkel" accept=".json,application/json" style="display:none">
+<input type="file" id="fileSkel" accept=".json,application/json" multiple style="display:none">
 <input type="file" id="fileSprite" accept="image/png,image/jpeg,image/*" style="display:none">
-<input type="file" id="fileWeapon" accept="image/png,image/*" style="display:none">
+<input type="file" id="fileSpritesMulti" accept="image/png,image/jpeg,image/*" multiple style="display:none">
+<input type="file" id="fileProps" accept="image/png,image/*" multiple style="display:none">
+<input type="file" id="fileProject" accept=".json,application/json" style="display:none">
+
+<div class="restore" id="restoreBanner" style="display:none"></div>
 
 <template id="__bundler_thumbnail">
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
@@ -273,6 +361,79 @@
     show:{ grid:true, labels:true, sprite:true, bones:true }
   };
   var WID=0;
+
+  // ---------- v2 project model ----------
+  // P holds the whole project; S mirrors the ACTIVE character (skeleton/sprite/weapons/view are
+  // shared object refs with the active character, so all existing v1 render/edit code is unchanged).
+  var P = { characters:[], library:[], activeChar:null, tray:[], traySel:null, libSel:null };
+  var CID=0, LID=0;
+  function charById(id){ return P.characters.find(function(c){return c.id===id;}); }
+  function AC(){ return charById(P.activeChar); }
+  function libById(id){ return P.library.find(function(p){return p.id===id;}); }
+  function norm(s){ return String(s).toLowerCase().replace(/[^a-z0-9]/g,""); }
+  function matchChar(stem){ var ns=norm(stem); if(!ns)return null; return P.characters.find(function(c){ var nc=norm(c.name); return nc&&(nc.indexOf(ns)>=0||ns.indexOf(nc)>=0); }); }
+
+  var BLANK_SPRITE={ src:null, aspect:0.74, cx:0, cz:0, height:1.3, opacity:0.8, visible:true };
+  function blankSprite(){ return { src:null, aspect:0.74, cx:0, cz:0, height:1.3, opacity:0.8, visible:true }; }
+  function defaultView(){ return { x:-0.5, y:-0.7, w:1.0, h:1.4 }; }
+
+  function newChar(name, skeleton){
+    var id="c"+(++CID);
+    var sprite=blankSprite(), view;
+    if(skeleton){
+      sprite.cx=(skeleton.bbox.x[0]+skeleton.bbox.x[1])/2;
+      sprite.cz=(skeleton.bbox.z[0]+skeleton.bbox.z[1])/2;
+      sprite.height=(skeleton.bbox.z[1]-skeleton.bbox.z[0])*1.18;
+      view=fitView({x:skeleton.bbox.x, z:skeleton.bbox.z});
+    } else view=defaultView();
+    var c={ id:id, name:name||("character "+id), skeleton:skeleton||null, sprite:sprite, weapons:[], view:view };
+    P.characters.push(c); return c;
+  }
+  function setCharSprite(c, src, aspect){
+    var sp=c.sprite; sp.src=src; sp.aspect=aspect; sp.visible=true;
+    if(c.skeleton){ sp.cx=(c.skeleton.bbox.x[0]+c.skeleton.bbox.x[1])/2; sp.cz=(c.skeleton.bbox.z[0]+c.skeleton.bbox.z[1])/2; sp.height=(c.skeleton.bbox.z[1]-c.skeleton.bbox.z[0])*1.18; }
+  }
+
+  // active-character mirror
+  function commitActive(){ var c=AC(); if(c){ c.skeleton=S.skeleton; c.sprite=S.sprite; c.weapons=S.weapons; c.view=S.view; } }
+  function loadInto(c){ S.skeleton=c.skeleton; S.sprite=c.sprite; S.weapons=c.weapons; S.view=c.view; S.sel={kind:null,id:null}; }
+  function clearActive(){ S.skeleton=null; S.sprite=blankSprite(); S.weapons=[]; S.view=defaultView(); S.sel={kind:null,id:null}; }
+  function activate(id){ if(id===P.activeChar)return; commitActive(); P.activeChar=id; var c=charById(id); if(c) loadInto(c); else clearActive(); renderAll(); }
+
+  // library props + placements
+  function addLibProp(name,src,aspect,grip){
+    var id="lib"+(++LID);
+    var p={ id:id, name:name||("prop "+id), src:src, aspect:aspect, gripAnchor:(grip||[0.5,0.6]).slice() };
+    P.library.push(p); return p;
+  }
+  function makeWeapon(prop, bone, offset){
+    var id="w"+(++WID);
+    return { id:id, libId:prop.id, asset:prop.name, src:prop.src, aspect:prop.aspect, grip:prop.gripAnchor, bone:bone, offset:(offset||[0,0]).slice(), rotationDeg:0, scale:1.2 };
+  }
+  function handBoneOf(sk){ if(!sk)return "bone_0"; var h=sk.bones.find(function(b){return /hand|wrist|bone_9$/.test(b.name);}); return h?h.name:(sk.bones[0]&&sk.bones[0].name)||"bone_0"; }
+  function placePropOn(c, prop, bone, offset){
+    if(!c||!prop) return null;
+    if(!bone) bone = (c.id===P.activeChar && S.sel.kind==="bone" && S.sel.id) || handBoneOf(c.skeleton);
+    var w=makeWeapon(prop, bone, offset);
+    c.weapons.push(w);
+    if(c.id===P.activeChar){ S.weapons=c.weapons; S.sel={kind:"weapon",id:w.id}; }
+    return w;
+  }
+  function placeProp(prop, bone, offset){
+    if(!AC()){ toast("Add a character first"); return null; }
+    var w=placePropOn(AC(), prop, bone, offset);
+    renderCanvas(); renderInspector(); renderLibrary(); autosave();
+    return w;
+  }
+  function nearestBoneName(x,z){
+    if(!S.skeleton) return null;
+    var best=null, bd=1e9;
+    S.skeleton.bones.forEach(function(b){ var d=Math.hypot(b.head[0]-x, b.head[2]-z); if(d<bd){ bd=d; best=b; } });
+    return (best && bd <= S.view.w*0.07) ? best.name : null;
+  }
+
+  function renderAll(){ renderCanvas(); renderInspector(); renderChars(); renderLibrary(); }
+
 
   // ---------- dom ----------
   var svg = document.getElementById("svg");
@@ -516,6 +677,8 @@
         dragState={kind:"scale",id:id,start:d||1e-4,val:w.scale};
       });
     });
+
+    if(typeof autosave==="function") autosave();
   }
 
   // ---------- inspector render ----------
@@ -621,7 +784,7 @@
     h+='</div>';
 
     h+='<div class="sec"><div class="sec-h">Grip anchor <span style="color:var(--dim2)" id="wp-gripval">'+w.grip[0].toFixed(2)+', '+w.grip[1].toFixed(2)+'</span></div>';
-    h+='<div class="grip"><div class="thumb" id="wp-thumb"><img src="'+esc(w.src)+'" id="wp-thumbimg" draggable="false"><div class="mk" id="wp-mk" style="left:'+(w.grip[0]*100)+'%;top:'+(w.grip[1]*100)+'%"></div></div><div class="hint">click on the image to set where the hand grips it</div></div>';
+    h+='<div class="grip"><div class="thumb" id="wp-thumb"><img src="'+esc(w.src)+'" id="wp-thumbimg" draggable="false"><div class="mk" id="wp-mk" style="left:'+(w.grip[0]*100)+'%;top:'+(w.grip[1]*100)+'%"></div></div><div class="hint">click to set the grip · shared by every placement of this prop</div></div>';
     h+='</div>';
 
     h+='<div class="sec"><div class="toolbtn"><button class="btn ghost" id="wp-deselect" style="flex:1">Deselect</button><button class="btn danger" id="wp-remove" style="flex:1">Remove weapon</button></div></div>';
@@ -702,10 +865,12 @@
         var rc=thumb.getBoundingClientRect();
         var u=clamp((e.clientX-rc.left)/rc.width,0,1);
         var vv=clamp((e.clientY-rc.top)/rc.height,0,1);
-        w.grip=[round(u),round(vv)];
+        var prop=libById(w.libId); var arr = prop?prop.gripAnchor:w.grip;
+        arr[0]=round(u); arr[1]=round(vv);
+        if(w.grip!==arr){ w.grip[0]=round(u); w.grip[1]=round(vv); }
         var mk=document.getElementById("wp-mk"); mk.style.left=(u*100)+"%"; mk.style.top=(vv*100)+"%";
-        var gv=document.getElementById("wp-gripval"); if(gv) gv.textContent=w.grip[0].toFixed(2)+", "+w.grip[1].toFixed(2);
-        renderCanvas();
+        var gv=document.getElementById("wp-gripval"); if(gv) gv.textContent=arr[0].toFixed(2)+", "+arr[1].toFixed(2);
+        renderCanvas(); renderLibrary(); autosave();
       });
     }
     var ds=document.getElementById("wp-deselect");
@@ -722,30 +887,25 @@
   // ---------- mutations ----------
   function removeWeapon(id){
     S.weapons=S.weapons.filter(function(w){return w.id!==id;});
+    var c=AC(); if(c) c.weapons=S.weapons;
     if(S.sel.id===id) S.sel={kind:null,id:null};
-    renderCanvas(); renderInspector();
+    renderCanvas(); renderInspector(); renderChars(); autosave();
   }
-  function addWeapon(asset,src,aspect){
-    var bone=null;
-    if(S.sel.kind==="bone") bone=S.sel.id;
-    if(!bone && S.skeleton){
-      var hit=S.skeleton.bones.find(function(b){return /hand|wrist|bone_9$/.test(b.name);});
-      bone = hit?hit.name:(S.skeleton.bones[0]&&S.skeleton.bones[0].name);
-    }
-    if(!bone) bone="bone_0";
-    var id="w"+(++WID);
-    S.weapons.push({ id:id, asset:asset, src:src, aspect:aspect, bone:bone, offset:[0,0], grip:[0.5,0.6], rotationDeg:0, scale:1.2 });
-    S.sel={kind:"weapon",id:id};
-    renderCanvas(); renderInspector();
+  function addWeapon(asset,src,aspect){ var p=addLibProp(asset,src,aspect,[0.5,0.6]); renderLibrary(); return placeProp(p); }
+  function loadSkeleton(sk, name){
+    commitActive();
+    var c=newChar(name||sk.name, sk);
+    P.activeChar=c.id; loadInto(c);
+    renderAll();
+    return c;
   }
-  function loadSkeleton(sk){
-    S.skeleton=sk;
-    S.sel={kind:null,id:null};
-    S.view=fitView({x:sk.bbox.x, z:sk.bbox.z});
-    S.sprite.cx=(sk.bbox.x[0]+sk.bbox.x[1])/2;
-    S.sprite.cz=(sk.bbox.z[0]+sk.bbox.z[1])/2;
-    S.sprite.height=(sk.bbox.z[1]-sk.bbox.z[0])*1.18;
-    renderCanvas(); renderInspector();
+  function addCharacters(list){ // [{name, skeleton}]
+    commitActive();
+    var last=null;
+    list.forEach(function(s){ last=newChar(s.name, s.skeleton); });
+    if(last){ P.activeChar=last.id; loadInto(last); }
+    renderAll();
+    return last;
   }
   function validateSkeleton(o){
     if(!o||typeof o!=="object") throw new Error("not an object");
@@ -869,24 +1029,11 @@
     document.body.removeChild(a); setTimeout(function(){URL.revokeObjectURL(url);},500);
   }
   function exportPlacement(){
-    if(!S.skeleton){ toast("Load a skeleton first"); return; }
-    var obj={
-      skeleton:S.skeleton.name||null,
-      facing:S.skeleton.facing||"-Y",
-      sprite:S.sprite.src?{ cx:round(S.sprite.cx), cz:round(S.sprite.cz), height:round(S.sprite.height) }:null,
-      weapons:S.weapons.map(function(w){
-        return {
-          asset:w.asset, bone:w.bone,
-          offset:[round(w.offset[0]),round(w.offset[1])],
-          gripAnchor:[round(w.grip[0]),round(w.grip[1])],
-          rotationDeg:round(w.rotationDeg),
-          scale:round(w.scale),
-          attachPoint:attachPoint(w)
-        };
-      })
-    };
-    download("sprite-motion.placement.json", JSON.stringify(obj,null,2));
-    toast("Exported placement JSON");
+    commitActive();
+    var c=AC();
+    if(!c || !c.skeleton){ toast("Load a skeleton first"); return; }
+    download("sprite-motion.placement.json", JSON.stringify(placementFor(c),null,2));
+    toast("Exported placement for "+c.name);
   }
   function exportSkeleton(){
     if(!S.skeleton){ toast("Load a skeleton first"); return; }
@@ -912,42 +1059,25 @@
   // ---------- toolbar buttons ----------
   function getSampleSkeleton(){ return JSON.parse(document.getElementById("sample-skeleton").textContent); }
 
-  document.getElementById("btnSample").addEventListener("click",function(){
-    loadSkeleton(getSampleSkeleton());
-    // also bring in sample sprite + halberd for an immediate full demo
-    loadImage(SAMPLE_SPRITE).then(function(r){ S.sprite.src=r.src; S.sprite.aspect=r.aspect; S.sprite.visible=true; renderCanvas(); renderInspector(); }).catch(function(){});
-    loadImage(SAMPLE_WEAPON).then(function(r){ addWeapon("halberd", r.src, r.aspect); }).catch(function(){});
-    toast("Loaded blackguard sample");
-  });
+  document.getElementById("btnSample").addEventListener("click", addSampleChar);
 
   document.getElementById("btnLoadSkel").addEventListener("click",function(){ document.getElementById("fileSkel").click(); });
-  document.getElementById("fileSkel").addEventListener("change",function(e){
-    var f=e.target.files[0]; if(!f) return;
-    var fr=new FileReader();
-    fr.onload=function(){ try{ loadSkeleton(validateSkeleton(JSON.parse(fr.result))); toast("Loaded "+f.name); }catch(err){ toast("Invalid JSON: "+err.message); } };
-    fr.readAsText(f); e.target.value="";
-  });
+  document.getElementById("fileSkel").addEventListener("change",function(e){ handleSkeletonFiles(e.target.files); e.target.value=""; });
 
   document.getElementById("btnSprite").addEventListener("click",function(){ document.getElementById("fileSprite").click(); });
   document.getElementById("fileSprite").addEventListener("change",function(e){
     var f=e.target.files[0]; if(!f) return;
     fileToDataURL(f).then(loadImage).then(function(r){
-      S.sprite.src=r.src; S.sprite.aspect=r.aspect; S.sprite.visible=true;
-      if(!S.skeleton){ S.sprite.cx=0; S.sprite.cz=0; }
-      renderCanvas(); renderInspector(); toast("Sprite placed");
+      var c=AC(); if(!c){ commitActive(); c=newChar("character"); P.activeChar=c.id; loadInto(c); }
+      setCharSprite(c, r.src, r.aspect);
+      if(c.id===P.activeChar) loadInto(c);
+      renderAll(); toast("Sprite placed on "+c.name);
     });
     e.target.value="";
   });
 
-  document.getElementById("btnWeapon").addEventListener("click",function(){ document.getElementById("fileWeapon").click(); });
-  document.getElementById("fileWeapon").addEventListener("change",function(e){
-    var f=e.target.files[0]; if(!f) return;
-    var asset=f.name.replace(/\.[a-z]+$/i,"");
-    fileToDataURL(f).then(loadImage).then(function(r){ addWeapon(asset, r.src, r.aspect); toast("Weapon added"); });
-    e.target.value="";
-  });
-
   document.getElementById("btnExport").addEventListener("click",exportPlacement);
+  document.getElementById("btnExportAll").addEventListener("click",exportAll);
   document.getElementById("btnExportSkel").addEventListener("click",exportSkeleton);
 
   // ---------- paste modal ----------
@@ -968,9 +1098,312 @@
   // ---------- resize ----------
   window.addEventListener("resize", renderCanvas);
 
+  // ============================================================
+  //  v2 — characters, library, project, panels, drag & drop
+  // ============================================================
+
+  // ---- skeleton file intake (multi) ----
+  function handleSkeletonFiles(files){
+    var arr=Array.from(files||[]); if(!arr.length) return;
+    var loaded=[], pending=arr.length, errs=0;
+    arr.forEach(function(f){
+      var fr=new FileReader();
+      fr.onload=function(){
+        try{ var sk=validateSkeleton(JSON.parse(fr.result)); var nm=sk.name||f.name.replace(/\.[a-z]+$/i,""); loaded.push({name:nm, skeleton:sk}); }
+        catch(err){ errs++; }
+        if(--pending===0) finish();
+      };
+      fr.onerror=function(){ errs++; if(--pending===0) finish(); };
+      fr.readAsText(f);
+    });
+    function finish(){
+      if(loaded.length){ addCharacters(loaded); toast("Added "+loaded.length+" character"+(loaded.length>1?"s":"")+(errs?" ("+errs+" failed)":"")); }
+      else toast("No valid skeletons"+(errs?" ("+errs+" failed)":""));
+    }
+  }
+
+  function addSampleChar(){
+    commitActive();
+    var sk=getSampleSkeleton();
+    var c=newChar(sk.name, sk);
+    P.activeChar=c.id; loadInto(c);
+    renderAll();
+    loadImage(SAMPLE_SPRITE).then(function(r){ setCharSprite(c, r.src, r.aspect); if(c.id===P.activeChar) loadInto(c); renderAll(); }).catch(function(){});
+    var prop=P.library.find(function(p){return p.name==="halberd";});
+    if(prop){ placePropOn(c, prop); renderAll(); }
+    else { loadImage(SAMPLE_WEAPON).then(function(r){ var pr=addLibProp("halberd", r.src, r.aspect, [0.5,0.6]); placePropOn(c, pr); renderAll(); }).catch(function(){}); }
+    toast("Added blackguard sample");
+  }
+
+  // ---- bulk sprite assign ----
+  function assignSpritesBulk(files){
+    var arr=Array.from(files||[]); if(!arr.length) return;
+    var pending=arr.length, assigned=0;
+    arr.forEach(function(f){
+      fileToDataURL(f).then(loadImage).then(function(r){
+        var stem=f.name.split(".")[0];
+        var c=matchChar(stem);
+        if(c){ setCharSprite(c, r.src, r.aspect); assigned++; }
+        else { P.tray.push({ name:stem, src:r.src, aspect:r.aspect }); }
+      }).catch(function(){}).then(function(){
+        if(--pending===0){
+          var c=AC(); if(c) loadInto(c);
+          renderAll();
+          toast(assigned+" sprite"+(assigned===1?"":"s")+" matched"+(P.tray.length?", "+P.tray.length+" unmatched":""));
+        }
+      });
+    });
+  }
+  function assignTrayTo(cid){
+    var c=charById(cid), s=P.tray[P.traySel]; if(!c||!s) return;
+    setCharSprite(c, s.src, s.aspect);
+    P.tray.splice(P.traySel,1); P.traySel=null;
+    if(c.id===P.activeChar) loadInto(c);
+    renderAll(); toast("Sprite assigned to "+c.name);
+  }
+
+  // ---- character ops ----
+  function removeChar(id){
+    var i=P.characters.findIndex(function(x){return x.id===id;}); if(i<0) return;
+    P.characters.splice(i,1);
+    if(P.activeChar===id){
+      var next=P.characters[i]||P.characters[i-1]||null;
+      P.activeChar=next?next.id:null;
+      if(next) loadInto(next); else clearActive();
+    }
+    renderAll();
+  }
+  function startRename(id, nmEl){
+    var c=charById(id); if(!c) return;
+    nmEl.innerHTML='<input value="'+esc(c.name)+'">';
+    var inp=nmEl.querySelector("input"); inp.focus(); inp.select();
+    var done=false;
+    function commit(){ if(done)return; done=true; var v=inp.value.trim(); if(v) c.name=v; renderAll(); }
+    inp.addEventListener("keydown",function(e){ if(e.key==="Enter"){ e.preventDefault(); commit(); } else if(e.key==="Escape"){ done=true; renderChars(); } });
+    inp.addEventListener("blur",commit);
+    inp.addEventListener("click",function(e){ e.stopPropagation(); });
+  }
+
+  // ---- library ops ----
+  function removeLib(id){
+    var used=0; P.characters.forEach(function(c){ (c.weapons||[]).forEach(function(w){ if(w.libId===id) used++; }); });
+    if(used && !window.confirm("This prop is used by "+used+" placement"+(used>1?"s":"")+". Remove the prop and "+(used>1?"those placements":"that placement")+"?")) return;
+    P.library=P.library.filter(function(p){return p.id!==id;});
+    P.characters.forEach(function(c){ c.weapons=(c.weapons||[]).filter(function(w){return w.libId!==id;}); });
+    var c=AC(); if(c) S.weapons=c.weapons;
+    if(P.libSel===id) P.libSel=null;
+    if(S.sel.kind==="weapon" && !S.weapons.some(function(w){return w.id===S.sel.id;})) S.sel={kind:null,id:null};
+    renderAll();
+  }
+  function addPropsFiles(files){
+    var arr=Array.from(files||[]); if(!arr.length) return;
+    var pending=arr.length, added=0;
+    arr.forEach(function(f){
+      var name=f.name.replace(/\.[a-z]+$/i,"");
+      fileToDataURL(f).then(loadImage).then(function(r){ addLibProp(name, r.src, r.aspect, [0.5,0.6]); added++; })
+        .catch(function(){}).then(function(){ if(--pending===0){ renderLibrary(); autosave(); toast("Added "+added+" prop"+(added===1?"":"s")+" to library"); } });
+    });
+  }
+
+  // ---- panels ----
+  var SKEL_GLYPH='<svg width="20" height="26" viewBox="0 0 20 26"><circle cx="10" cy="4.5" r="3" fill="none" stroke="#7fd4e6" stroke-width="1.3"/><line x1="10" y1="7.5" x2="10" y2="16" stroke="#7fd4e6" stroke-width="1.3"/><line x1="10" y1="10" x2="4" y2="14" stroke="#7fd4e6" stroke-width="1.3"/><line x1="10" y1="10" x2="16" y2="14" stroke="#7fd4e6" stroke-width="1.3"/><line x1="10" y1="16" x2="5.5" y2="23" stroke="#7fd4e6" stroke-width="1.3"/><line x1="10" y1="16" x2="14.5" y2="23" stroke="#7fd4e6" stroke-width="1.3"/></svg>';
+  function renderChars(){
+    document.getElementById("charCnt").textContent=P.characters.length;
+    var el=document.getElementById("charList");
+    if(!P.characters.length){
+      el.innerHTML='<div class="empty" style="padding:10px 8px">No characters yet.<br>Add skeleton <b>.json</b> files, or the sample.</div>';
+      renderTray(); return;
+    }
+    el.innerHTML=P.characters.map(function(c){
+      var active=c.id===P.activeChar;
+      var thumb=(c.sprite&&c.sprite.src)?('<img src="'+esc(c.sprite.src)+'">'):SKEL_GLYPH;
+      var bones=c.skeleton?c.skeleton.bones.length:0;
+      return '<div class="charcard'+(active?' active':'')+'" data-cid="'+c.id+'">'
+        +'<div class="thumb">'+thumb+'</div>'
+        +'<div class="meta"><div class="nm" data-nm="'+c.id+'" title="double-click to rename">'+esc(c.name)+'</div>'
+        +'<div class="sub">'+bones+' bones · '+(c.weapons?c.weapons.length:0)+' wpn</div></div>'
+        +'<button class="x" data-delchar="'+c.id+'" title="Remove character">✕</button></div>';
+    }).join("");
+    el.querySelectorAll("[data-cid]").forEach(function(card){
+      card.addEventListener("click",function(e){
+        if(e.target.closest("[data-delchar]")||e.target.closest("input")) return;
+        var id=card.getAttribute("data-cid");
+        if(P.traySel!=null){ assignTrayTo(id); return; }
+        activate(id);
+      });
+    });
+    el.querySelectorAll("[data-delchar]").forEach(function(b){ b.addEventListener("click",function(e){ e.stopPropagation(); removeChar(b.getAttribute("data-delchar")); }); });
+    el.querySelectorAll("[data-nm]").forEach(function(nm){ nm.addEventListener("dblclick",function(e){ e.stopPropagation(); startRename(nm.getAttribute("data-nm"), nm); }); });
+    renderTray();
+  }
+  function renderTray(){
+    var t=document.getElementById("tray"), tt=document.getElementById("trayTiles");
+    if(!P.tray.length){ t.style.display="none"; return; }
+    t.style.display="block";
+    tt.innerHTML=P.tray.map(function(s,i){ return '<div class="traytile'+(P.traySel===i?" sel":"")+'" data-tray="'+i+'" style="background-image:url('+JSON.stringify(s.src)+')" title="'+esc(s.name)+'"><span class="tn">'+esc(s.name)+'</span></div>'; }).join("");
+    tt.querySelectorAll("[data-tray]").forEach(function(el){ el.addEventListener("click",function(){ var i=+el.getAttribute("data-tray"); P.traySel=(P.traySel===i?null:i); renderTray(); }); });
+  }
+  function renderLibrary(){
+    document.getElementById("libCnt").textContent=P.library.length;
+    var el=document.getElementById("libStrip");
+    if(!P.library.length){ el.innerHTML='<div class="libempty">No props. Click <b>+ Add prop(s)…</b> — build a reusable library, then drag a prop onto a character.</div>'; return; }
+    el.innerHTML=P.library.map(function(p){
+      return '<div class="libtile'+(P.libSel===p.id?" sel":"")+'" draggable="true" data-lib="'+p.id+'" title="drag onto a character · double-click to place">'
+        +'<div class="img"><img src="'+esc(p.src)+'"><button class="x" data-dellib="'+p.id+'" title="Remove prop">✕</button></div>'
+        +'<div class="nm">'+esc(p.name)+'</div></div>';
+    }).join("");
+    el.querySelectorAll("[data-lib]").forEach(function(t){
+      var id=t.getAttribute("data-lib");
+      t.addEventListener("dragstart",function(e){ e.dataTransfer.setData("text/prop",id); e.dataTransfer.setData("text/plain",id); e.dataTransfer.effectAllowed="copy"; dragProp=id; });
+      t.addEventListener("dragend",function(){ dragProp=null; document.getElementById("stagewrap").classList.remove("dropactive"); });
+      t.addEventListener("click",function(e){ if(e.target.closest("[data-dellib]"))return; P.libSel=(P.libSel===id?null:id); renderLibrary(); });
+      t.addEventListener("dblclick",function(e){ if(e.target.closest("[data-dellib]"))return; var p=libById(id); if(p){ if(!AC()){ toast("Add a character first"); return; } placeProp(p); } });
+    });
+    el.querySelectorAll("[data-dellib]").forEach(function(b){ b.addEventListener("click",function(e){ e.stopPropagation(); removeLib(b.getAttribute("data-dellib")); }); });
+  }
+
+  // ---- drag a library prop onto the canvas ----
+  var dragProp=null;
+  (function(){
+    var sw=document.getElementById("stagewrap");
+    sw.addEventListener("dragover",function(e){ if(dragProp){ e.preventDefault(); e.dataTransfer.dropEffect="copy"; sw.classList.add("dropactive"); } });
+    sw.addEventListener("dragleave",function(e){ if(e.target===sw) sw.classList.remove("dropactive"); });
+    sw.addEventListener("drop",function(e){
+      e.preventDefault(); sw.classList.remove("dropactive");
+      var id=e.dataTransfer.getData("text/prop")||e.dataTransfer.getData("text/plain")||dragProp; dragProp=null;
+      var prop=libById(id); if(!prop) return;
+      if(!AC()){ toast("Add a character first"); return; }
+      var bn=null, offset=[0,0];
+      if(S.skeleton){
+        var c=cursorBone(e.clientX,e.clientY);
+        bn=nearestBoneName(c[0],c[1]) || handBoneOf(S.skeleton);
+        var b=boneByName(bn);
+        if(b) offset=[round(c[0]-b.head[0]), round(c[1]-b.head[2])];
+      }
+      placeProp(prop, bn, offset); renderChars();
+      toast("Placed "+prop.name+" on "+(bn||"bone"));
+    });
+  })();
+
+  // ---- export (active + all) ----
+  function placementFor(c){
+    return {
+      skeleton: c.skeleton?c.skeleton.name:null,
+      facing: c.skeleton?c.skeleton.facing:"-Y",
+      sprite: (c.sprite&&c.sprite.src)?{ cx:round(c.sprite.cx), cz:round(c.sprite.cz), height:round(c.sprite.height) }:null,
+      weapons: (c.weapons||[]).map(function(w){
+        var prop=libById(w.libId);
+        var asset=prop?prop.name:(w.asset||"prop");
+        var grip=prop?prop.gripAnchor:(w.grip||[0.5,0.6]);
+        var b=c.skeleton&&c.skeleton.bones.find(function(bb){return bb.name===w.bone;});
+        var ap=b?[ round(b.head[0]+w.offset[0]), round(b.head[1]), round(b.head[2]+w.offset[1]) ]:null;
+        return { asset:asset, bone:w.bone, offset:[round(w.offset[0]),round(w.offset[1])], gripAnchor:[round(grip[0]),round(grip[1])], rotationDeg:round(w.rotationDeg), scale:round(w.scale), attachPoint:ap };
+      })
+    };
+  }
+  function exportAll(){
+    commitActive();
+    if(!P.characters.length){ toast("No characters to export"); return; }
+    var obj={ format:"sprite-motion.placements", version:2, characters:P.characters.map(placementFor) };
+    download("sprite-motion.placements.json", JSON.stringify(obj,null,2));
+    toast("Exported "+P.characters.length+" placement"+(P.characters.length>1?"s":""));
+  }
+
+  // ---- project save / load ----
+  function projectObject(){
+    return {
+      format:"sprite-motion.project", version:2, activeChar:P.activeChar,
+      library:P.library.map(function(p){ return { id:p.id, name:p.name, src:p.src, aspect:round(p.aspect), gripAnchor:[round(p.gripAnchor[0]),round(p.gripAnchor[1])] }; }),
+      characters:P.characters.map(function(c){
+        return {
+          id:c.id, name:c.name,
+          skeleton:c.skeleton,
+          sprite:(c.sprite&&c.sprite.src)?{ src:c.sprite.src, aspect:round(c.sprite.aspect), cx:round(c.sprite.cx), cz:round(c.sprite.cz), height:round(c.sprite.height), opacity:round(c.sprite.opacity), visible:c.sprite.visible }:null,
+          weapons:(c.weapons||[]).map(function(w){ return { id:w.id, libId:w.libId, bone:w.bone, offset:[round(w.offset[0]),round(w.offset[1])], rotationDeg:round(w.rotationDeg), scale:round(w.scale) }; }),
+          view:c.view
+        };
+      })
+    };
+  }
+  function saveProject(){
+    commitActive();
+    if(!P.characters.length){ toast("Nothing to save yet"); return; }
+    download("sprite-motion.project.json", JSON.stringify(projectObject(),null,2));
+    toast("Project saved");
+  }
+  function maxId(arr,pfx){ var m=0; arr.forEach(function(o){ var n=parseInt(String(o.id).replace(pfx,""),10); if(!isNaN(n)&&n>m)m=n; }); return m; }
+  function loadProject(obj){
+    if(!obj || obj.format!=="sprite-motion.project") throw new Error("not a sprite-motion project file");
+    P.library=(obj.library||[]).map(function(p){ return { id:p.id, name:p.name, src:p.src, aspect:p.aspect||1, gripAnchor:(p.gripAnchor||[0.5,0.6]).slice() }; });
+    P.characters=(obj.characters||[]).map(function(c){
+      var sp = c.sprite ? { src:c.sprite.src, aspect:c.sprite.aspect||0.74, cx:c.sprite.cx||0, cz:c.sprite.cz||0, height:c.sprite.height||1.3, opacity:(c.sprite.opacity==null?0.8:c.sprite.opacity), visible:c.sprite.visible!==false } : blankSprite();
+      var weapons=(c.weapons||[]).map(function(w){
+        var prop=P.library.find(function(pp){return pp.id===w.libId;});
+        return { id:w.id, libId:w.libId, asset:prop?prop.name:"prop", src:prop?prop.src:null, aspect:prop?prop.aspect:1, grip:prop?prop.gripAnchor:[0.5,0.6], bone:w.bone, offset:(w.offset||[0,0]).slice(), rotationDeg:w.rotationDeg||0, scale:w.scale||1.2 };
+      });
+      var view=c.view||(c.skeleton?fitView({x:c.skeleton.bbox.x,z:c.skeleton.bbox.z}):defaultView());
+      return { id:c.id, name:c.name||("character "+c.id), skeleton:c.skeleton||null, sprite:sp, weapons:weapons, view:view };
+    });
+    P.tray=[]; P.traySel=null; P.libSel=null;
+    CID=maxId(P.characters,"c"); LID=maxId(P.library,"lib");
+    WID=0; P.characters.forEach(function(c){ (c.weapons||[]).forEach(function(w){ var n=parseInt(String(w.id).replace("w",""),10); if(!isNaN(n)&&n>WID)WID=n; }); });
+    P.activeChar=(obj.activeChar && charById(obj.activeChar))?obj.activeChar:(P.characters[0]?P.characters[0].id:null);
+    var ac=AC(); if(ac) loadInto(ac); else clearActive();
+    renderAll();
+  }
+
+  // ---- autosave / restore ----
+  var SKEY="spritemotion.session.v2";
+  var toastedOnce={};
+  function toastOnce(m){ if(toastedOnce[m])return; toastedOnce[m]=1; toast(m); }
+  function autosaveNow(){
+    if(!P.characters.length) return;   // don't clobber a saved session with an empty start state
+    commitActive();
+    var json; try{ json=JSON.stringify(projectObject()); }catch(e){ return; }
+    if(json.length > 4*1024*1024){ try{ localStorage.removeItem(SKEY); }catch(e){} toastOnce("Project too large to autosave — use Save project"); return; }
+    try{ localStorage.setItem(SKEY, json); }catch(e){ toastOnce("Autosave failed (storage full) — use Save project"); }
+  }
+  var asTimer; function autosave(){ clearTimeout(asTimer); asTimer=setTimeout(autosaveNow, 700); }
+  function offerRestore(){
+    var raw; try{ raw=localStorage.getItem(SKEY); }catch(e){ return; }
+    if(!raw) return;
+    var obj; try{ obj=JSON.parse(raw); }catch(e){ return; }
+    if(!obj || !(obj.characters && obj.characters.length)) return;
+    var n=obj.characters.length, np=(obj.library?obj.library.length:0);
+    var bn=document.getElementById("restoreBanner");
+    bn.innerHTML='<span><b>Previous session</b> found<div class="sub">'+n+' character'+(n>1?'s':'')+' · '+np+' prop'+(np===1?'':'s')+'</div></span>'
+      +'<button class="btn amber" id="rsRestore" style="height:26px">Restore</button>'
+      +'<button class="btn ghost" id="rsDismiss" style="height:26px">Dismiss</button>';
+    bn.style.display="flex";
+    document.getElementById("rsRestore").addEventListener("click",function(){ try{ loadProject(obj); toast("Session restored"); }catch(e){ toast("Restore failed"); } bn.style.display="none"; });
+    document.getElementById("rsDismiss").addEventListener("click",function(){ bn.style.display="none"; });
+  }
+
+  // ---- new panel / toolbar wiring ----
+  document.getElementById("btnAddChars").addEventListener("click",function(){ document.getElementById("fileSkel").click(); });
+  document.getElementById("btnAddSampleChar").addEventListener("click", addSampleChar);
+  document.getElementById("btnAssignSprites").addEventListener("click",function(){ document.getElementById("fileSpritesMulti").click(); });
+  document.getElementById("fileSpritesMulti").addEventListener("change",function(e){ assignSpritesBulk(e.target.files); e.target.value=""; });
+  document.getElementById("btnAddProps").addEventListener("click",function(){ document.getElementById("fileProps").click(); });
+  document.getElementById("fileProps").addEventListener("change",function(e){ addPropsFiles(e.target.files); e.target.value=""; });
+  document.getElementById("btnSaveProj").addEventListener("click", saveProject);
+  document.getElementById("btnLoadProj").addEventListener("click",function(){ document.getElementById("fileProject").click(); });
+  document.getElementById("fileProject").addEventListener("change",function(e){
+    var f=e.target.files[0]; if(!f) return;
+    var fr=new FileReader();
+    fr.onload=function(){ try{ loadProject(JSON.parse(fr.result)); toast("Loaded "+f.name); }catch(err){ toast("Load failed: "+err.message); } };
+    fr.readAsText(f); e.target.value="";
+  });
+  document.getElementById("charCollapse").addEventListener("click",function(){
+    var cp=document.getElementById("charpanel"), bd=document.getElementById("body");
+    var col=cp.classList.toggle("collapsed"); bd.classList.toggle("charcollapsed",col);
+    this.textContent=col?"›":"‹"; this.title=col?"Expand panel":"Collapse panel";
+    requestAnimationFrame(renderCanvas);
+  });
+
   // ---------- init ----------
-  renderCanvas();
-  renderInspector();
+  renderAll();
+  offerRestore();
 
   // ---------- command palette (double right-click, or Ctrl/Cmd+K) ----------
   (function(){
@@ -999,26 +1432,44 @@
 
     function commands(){
       var c=[
-        {l:"Load blackguard sample", run:function(){ loadSkeleton(getSampleSkeleton()); toast("Loaded blackguard sample"); }},
+        {l:"Add blackguard sample", run:function(){ addSampleChar(); }},
+        {l:"Add character(s)…", g:"character", run:function(){ byId("btnAddChars").click(); }},
         {l:"Load skeleton from file…", run:function(){ byId("btnLoadSkel").click(); }},
         {l:"Paste skeleton JSON…", run:function(){ openPaste(); }},
         {l:"Upload sprite…", run:function(){ byId("btnSprite").click(); }},
-        {l:"Add weapon / prop…", run:function(){ byId("btnWeapon").click(); }},
-        {l:"Export placement JSON", run:function(){ exportPlacement(); }},
+        {l:"Assign sprites in bulk…", run:function(){ byId("btnAssignSprites").click(); }},
+        {l:"Add prop(s) to library…", g:"library", run:function(){ byId("btnAddProps").click(); }},
+        {l:"Next character", g:"character", run:function(){ stepChar(1); }},
+        {l:"Previous character", g:"character", run:function(){ stepChar(-1); }},
+        {l:"Save project", g:"project", run:function(){ saveProject(); }},
+        {l:"Load project…", g:"project", run:function(){ byId("btnLoadProj").click(); }},
+        {l:"Restore previous session", g:"project", run:function(){ offerRestore(); }},
+        {l:"Export placement JSON (active)", run:function(){ exportPlacement(); }},
+        {l:"Export all placements", run:function(){ exportAll(); }},
         {l:"Export skeleton JSON", run:function(){ exportSkeleton(); }},
-        {l:"Fit view to skeleton", run:function(){ if(!S.skeleton){ toast("Load a skeleton first"); return; } S.view=fitView({x:S.skeleton.bbox.x,z:S.skeleton.bbox.z}); renderCanvas(); renderRulers(); }},
+        {l:"Fit view to skeleton", run:function(){ if(!S.skeleton){ toast("Load a skeleton first"); return; } S.view=fitView({x:S.skeleton.bbox.x,z:S.skeleton.bbox.z}); renderCanvas(); }},
         {l:"Toggle grid ("+(tgOn("grid")?"on":"off")+")", run:function(){ tg("grid"); }},
         {l:"Toggle labels ("+(tgOn("labels")?"on":"off")+")", run:function(){ tg("labels"); }},
         {l:"Toggle sprite ("+(tgOn("sprite")?"on":"off")+")", run:function(){ tg("sprite"); }},
         {l:"Toggle bones ("+(tgOn("bones")?"on":"off")+")", run:function(){ tg("bones"); }},
         {l:"Deselect", run:function(){ select(null,null); }}
       ];
+      P.library.forEach(function(p){ c.push({l:"Place prop: "+p.name, g:"library", run:function(){ if(!AC()){ toast("Add a character first"); return; } placeProp(p); }}); });
+      P.characters.forEach(function(ch){ if(ch.id!==P.activeChar) c.push({l:"Switch to: "+ch.name, g:"character", run:function(){ activate(ch.id); }}); });
       var sw=selWeapon();
       if(sw) c.push({l:"Remove selected weapon ("+sw.asset+")", run:function(){ removeWeapon(sw.id); }});
       (S.weapons||[]).forEach(function(wp){ c.push({l:"Select weapon: "+wp.asset+"  ["+wp.bone+"]", g:"weapon", run:function(){ select("weapon",wp.id); }}); });
       if(S.skeleton) S.skeleton.bones.forEach(function(b){ c.push({l:"Select bone: "+b.name, g:"bone", run:function(){ select("bone",b.name); }}); });
       return c;
     }
+    function stepChar(dir){
+      if(!P.characters.length) return;
+      var i=P.characters.findIndex(function(c){return c.id===P.activeChar;});
+      if(i<0) i=0;
+      var n=(i+dir+P.characters.length)%P.characters.length;
+      activate(P.characters[n].id);
+    }
+
 
     var ALL=[], cur=[], active=0;
     function refresh(){
