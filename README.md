@@ -4,7 +4,7 @@
 
 sprite-motion exists to **eliminate coordinate guessing** in the studio's 3D character-rigging pipeline. An auto-rigger gives us a character skeleton as raw 3D numbers; we then need to attach weapons (a halberd, an axe, a staff) to the right bone at the right spot. Doing that by eyeballing pixel positions in a headless renderer is slow and error-prone — it was the wall the pipeline kept hitting. This tool puts the placement in a browser where **the canvas grid *is* the rig's real coordinate space**, so you drag a weapon onto the hand, read the exact numbers, and export placement data the Blender rig step applies verbatim.
 
-> Status: **editor v3 is in the repo** — [`app/sprite-motion.html`](app/sprite-motion.html), a self-contained offline build (made with **Claude Design**): a bone-space canvas for placing weapons/props precisely, with **snapping** (grid + bones), per-weapon **depth/Y + a 2.5D preview**, **weapon presets**, grip + **tip anchors**, a **Characters panel** (multi + bulk), a reusable **weapon/prop library**, **project save/load** (autosave), and a **command palette** (double right-click or `Ctrl/⌘K`). Export one character's placement, or the **whole roster** in one file. The **Blender bridge** ([`pipeline/apply_placement.py`](pipeline/apply_placement.py)) consumes either and attaches each weapon GLB at the exact `attachPoint` (depth, rotation, scale) with a `weapon_grip → weapon_tip` chain whose tip joint follows the editor's `tipAnchor` — a single character, or the whole roster in one run (`pipeline/build_manifest.py` auto-builds the manifest). The full loop (**export skeleton → place → apply**) is closed; the weapon lands precisely where you put it. A partial React exploration in `src/` is kept as reference for the coordinate math.
+> Status: **editor v3 is in the repo** — [`app/sprite-motion.html`](app/sprite-motion.html), a self-contained offline build (made with **Claude Design**): a bone-space canvas for placing weapons/props precisely, with **snapping** (grid + bones), per-weapon **depth/Y + a 2.5D preview**, **weapon presets**, grip + **tip anchors**, a **Characters panel** (multi + bulk), a reusable **weapon/prop library**, **project save/load** (autosave), and a **command palette** (double right-click or `Ctrl/⌘K`). Export one character's placement, or the **whole roster** in one file. The **Blender bridge** ([`pipeline/apply_placement.py`](pipeline/apply_placement.py)) consumes either and attaches each weapon GLB at the exact `attachPoint` (depth, rotation, scale) with a `weapon_grip → weapon_tip` chain whose tip joint follows the editor's `tipAnchor` — a single character, or the whole roster in one run (`pipeline/build_manifest.py` auto-builds the manifest). The full loop (**export skeleton → place → apply**) is closed; the weapon lands precisely where you put it. The coordinate math (front projection, grid, render transforms) lives in [Coordinate math](#coordinate-math-editor-internals) below — ported from an earlier React/SVG exploration that has since been retired.
 
 ---
 
@@ -62,6 +62,79 @@ Exported by `_export_skeleton.py` straight from the rigged GLB — exact numbers
 ```
 `attachPoint = bone.head + [offset.x, 0, offset.z]` — the exact bone-space point the Blender rig drops the weapon's grip onto. This replaces hand-guessed coordinates.
 
+## Coordinate math (editor internals)
+
+Reference for the bone-space ↔ screen projection and the render transforms — ported here from an earlier React/SVG exploration (the retired `src/` tree) so the math survives the editor's move to self-contained HTML. The shipping editors (`app/*.html`) and the Python pipeline have no build step; nothing below requires one.
+
+**Front projection.** Bone-space is 3D — `x` = screen-right, `z` = up, `y` = depth (camera faces −Y). The editor draws the `(x, z)` front view; `y` is shown numerically and carried through export, never positioned in 2D. SVG's y-axis grows downward, so +z must render up:
+
+```
+toSvg(x, z)     = (x, −z)     // bone-space → SVG user space
+fromSvg(sx, sy) = (sx, −sy)   // SVG → bone-space (cursor hit-testing)
+```
+
+The SVG `viewBox` is expressed in these flipped coords, so the canvas grid *is* bone-space: 1 SVG unit = 1 bone-space unit.
+
+**Fit the view to a skeleton.** Pad the bbox ~18 % and frame it. The top edge is `z = z1` (max z), so the viewBox origin's y is `−(z1 + pad)`:
+
+```
+w  = x1 − x0,          h  = z1 − z0
+px = w·0.18 + 0.04,    pz = h·0.18 + 0.04
+viewBox = { x: x0 − px,   y: −(z1 + pz),   w: w + 2·px,   h: h + 2·pz }
+```
+
+**"Nice" grid step.** Aim for ~8–14 gridlines on the larger axis; snap the raw step to 1 / 2 / 5 / 10 × 10ⁿ:
+
+```
+raw  = max(w, h) / 11
+pow  = 10^floor(log10(raw))
+n    = raw / pow
+step = (n<1.5 ? 1 : n<3.5 ? 2 : n<7.5 ? 5 : 10) · pow
+```
+
+Labels are 2-dp with trailing zeros trimmed and exact zero shown as `0`; the `x = 0` and `z = 0` lines are styled as axes.
+
+**Place a weapon image.** A weapon sits on its bone at `attach = bone.head + offset` (offset is bone-space `(x, z)`). Its image scales to `h = scale · skeletonHeight`, width `wd = h · aspect`, and is positioned so the image's normalised **grip anchor** `(ax, ay) ∈ [0,1]²` lands on the attach point, then rotated in-plane about that point:
+
+```
+(sx, sy)    = toSvg(attach.x, attach.z)
+imageCorner = (sx − ax·wd,  sy − ay·h)
+transform   = rotate(rotationDeg, about (sx, sy))
+```
+
+**Place the reference sprite.** Centred at `(cx, cz)`, spanning `height` in bone-space, aspect from the image:
+
+```
+x = cx − (height·aspect)/2,   y = −(cz + height/2),   width = height·aspect
+```
+
+**Zoom about the cursor.** On wheel, scale the view by `f` (≈1.12 per notch) while keeping the bone-space point under the cursor fixed:
+
+```
+x' = mx − (mx − x)·f,   y' = my − (my − y)·f,   w' = w·f,   h' = h·f
+```
+
+**Export → `attachPoint`.** The 2D offset becomes a full 3D bone-space point the rig consumes (y taken from the bone head, unchanged), rounded to `1e-4`:
+
+```
+attachPoint = [ head.x + offset.x,  head.y,  head.z + offset.z ]
+```
+
+This is the resolved point in the **Placement** schema above — what the Blender step drops the grip onto.
+
+### Editor data model
+
+The internal types the exploration used (the export schema above is the persisted subset):
+
+| Type | Fields |
+|------|--------|
+| `Bone` | `name`, `parent`, `head:[x,y,z]`, `tail:[x,y,z]`, `deform` |
+| `Skeleton` | `name`, `facing`, `bbox:{x,y,z:[min,max]}`, `bones[]` |
+| `SpriteState` | `src`, `aspect` (w/h), `cx`, `cz`, `height`, `opacity`, `visible` |
+| `Weapon` | `asset`, `src`, `aspect`, `bone`, `offset:[x,z]`, `anchor:[u,v]` (grip, 0–1), `rotationDeg`, `scale` |
+
+Defaults the editor applied on load: sprite centre = bbox midpoint, sprite height = z-span × 1.18; a new weapon binds to the selected bone, else the first bone matching `/hand|wrist|bone_9$/`. Bone joints stay chain-joined — dragging a head moves the parent's tail with it.
+
 ## Where it fits the pipeline
 
 ```
@@ -102,7 +175,6 @@ The editor is the **placement authority**; the headless Blender step is the **ap
 | `public/samples/blackguard.skeleton.json` | Real 40-bone skeleton (the embedded sample). |
 | `public/samples/blackguard.front.png` | Body sprite for the reference layer. |
 | `public/samples/halberd.png` | Transparent halberd prop. |
-| `src/` | **Reference only** — an early React/SVG exploration that captures the bone-space projection (`src/lib/projection.ts`), the data types (`src/types.ts`), the store, and a draggable canvas. The canonical editor is the Claude Design HTML; this documents the math/interactions. |
 
 ## Using it
 
