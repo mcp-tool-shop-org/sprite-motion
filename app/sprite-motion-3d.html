@@ -86,6 +86,17 @@
   .brow .jd{width:6px;height:6px;border-radius:50%;background:var(--dim2);flex:none}
   .brow.sel .jd{background:var(--amber)}
   .brow .bx{margin-left:auto;font-size:9.5px;color:var(--dim2)}
+  .rolegrp{font-family:var(--mono);font-size:9px;color:var(--dim2);text-transform:uppercase;letter-spacing:.5px;padding:8px 4px 3px}
+  .rolerow{display:flex;align-items:center;gap:7px;padding:4px 8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:11px;color:var(--dim)}
+  .rolerow:hover{background:var(--panel2)}
+  .rolerow.sel{background:rgba(240,168,48,.14);color:var(--amber)}
+  .rolerow .rname{color:var(--text);flex:none;min-width:72px}
+  .rolerow.sel .rname{color:var(--amber)}
+  .rolerow .rbone{margin-left:auto;color:var(--amber);font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:96px}
+  .rolerow .rmiss{margin-left:auto;color:var(--dim2)}
+  .rolerow .rmiss.req{color:var(--amber)}
+  .rolerow .rclr{flex:none;width:18px;height:18px;font-size:10px;margin-left:4px}
+  .rolewarn{font-family:var(--mono);font-size:10px;color:var(--amber);background:rgba(240,168,48,.08);border:1px solid var(--amber-dim);border-radius:5px;padding:5px 8px;margin-bottom:6px}
 
   /* inspector fields */
   .field{margin-bottom:9px}
@@ -244,6 +255,19 @@
           <div class="kv"><span class="k">world (x,y,z)</span><span class="v" id="selBonePos">—</span></div>
         </div>
       </div>
+      <!-- Roles -->
+      <div class="panel collapsed" id="panelRoles">
+        <div class="panel-h"><span class="tw">&#9660;</span><span class="ttl">Roles</span><span class="cnt" id="roleCnt">0</span></div>
+        <div class="panel-b">
+          <div class="kv" id="roleHead" style="border-top:none"></div>
+          <div class="minibtns" style="margin:7px 0 8px">
+            <button class="btn" id="btnPropose" style="flex:1;justify-content:center">Propose</button>
+            <button class="btn amber" id="btnConfirmRoles" style="flex:1;justify-content:center">Confirm</button>
+            <button class="btn ghost" id="btnExportRoles" title="Export roleMap JSON" style="justify-content:center">&#10515;</button>
+          </div>
+          <div id="roleList"></div>
+        </div>
+      </div>
       <!-- Library -->
       <div class="panel" id="panelLib">
         <div class="panel-h"><span class="tw">&#9660;</span><span class="ttl">Weapons / Library</span><span class="cnt" id="libCnt">0</span></div>
@@ -259,6 +283,21 @@
         <div class="panel-h"><span class="tw">&#9660;</span><span class="ttl">Presets</span><span class="cnt" id="preCnt">0</span></div>
         <div class="panel-b"><div id="preList"></div></div>
       </div>
+      <!-- Pose library -->
+      <div class="panel collapsed" id="panelPoses">
+        <div class="panel-h"><span class="tw">&#9660;</span><span class="ttl">Pose library</span><span class="cnt" id="poseCnt">0</span></div>
+        <div class="panel-b">
+          <div id="poseGate" class="empty"></div>
+          <div id="poseBody" class="hidden">
+            <div class="minibtns" style="margin-bottom:8px">
+              <button class="btn" id="btnSavePose" style="flex:1;justify-content:center">Save current pose</button>
+              <button class="btn ghost" id="btnExportPoses" title="Export pose library JSON" style="justify-content:center">&#10515;</button>
+            </div>
+            <div class="rowflex"><label>blend</label><input type="range" id="poseBlend" min="0" max="1" step="0.01" value="1"><input class="num" id="poseBlendN" value="1.00"></div>
+            <div id="poseList"></div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div id="viewport">
@@ -266,7 +305,7 @@
       <div class="vp-overlay" id="vp-readout"></div>
       <div class="vp-overlay" id="vp-mode"></div>
       <div class="vp-overlay" id="vp-arm"></div>
-      <div class="vp-overlay" id="vp-hint">double-click a bone to select &middot; arrow keys pose it &middot; drag empty space to orbit &middot; wheel to zoom &middot; ⌘/Ctrl-K or double right-click for commands</div>
+      <div class="vp-overlay" id="vp-hint">drag empty space to orbit &middot; wheel to zoom &middot; ⌘/Ctrl-K or double right-click for commands</div>
       <div id="sheet">
         <div class="sheet-card">
           <div class="sheet-head">
@@ -374,6 +413,19 @@ const BUILTIN_PRESETS=[
 ];
 PRESETS = BUILTIN_PRESETS.map(p=>JSON.parse(JSON.stringify(p)));
 
+// ============================================================ canonical role profile (v3)
+const ROLE_GROUPS=[
+  ['Spine', ['hips','spine','spine2','chest','neck','head']],
+  ['Arms',  ['shoulder.R','upperArm.R','foreArm.R','hand.R','shoulder.L','upperArm.L','foreArm.L','hand.L']],
+  ['Legs',  ['upperLeg.R','lowerLeg.R','foot.R','toe.R','upperLeg.L','lowerLeg.L','foot.L','toe.L']],
+  ['Exotic',['tail','wing.R','wing.L','fin.R','fin.L']],
+];
+const ALL_ROLES=ROLE_GROUPS.flatMap(g=>g[1]);
+const ROLE_REQUIRED=new Set(['hips','spine','chest','neck','head','upperArm.R','foreArm.R','hand.R','upperArm.L','foreArm.L','hand.L','upperLeg.R','lowerLeg.R','foot.R','upperLeg.L','lowerLeg.L','foot.L']);
+const COMBAT_POSES=['idle-ready','guard','anticipation','strike','recovery','hurt'];
+let POSES=[];                 // canonical pose library (project-level)
+let roleAssignMode=null;      // role name awaiting a joint click, or null
+
 function activeChar(){ return CHARS.find(c=>c.id===activeCharId)||null; }
 function selWeapon(){ const c=activeChar(); return c? c.weapons.find(w=>w.id===selWeaponId)||null : null; }
 function libById(id){ return LIB.find(l=>l.id===id)||null; }
@@ -444,7 +496,7 @@ function finalizeCharacter(name, root, bones, isDemo){
   // tag body meshes (for view ghosting) and remember their base material settings
   root.traverse(o=>{ if(o.isMesh){ o.userData.charBody=true; const ms=Array.isArray(o.material)?o.material:[o.material];
     o.userData._matBase=ms.map(mm=>({t:mm.transparent,o:mm.opacity,d:mm.depthWrite})); } });
-  const rec={ id:'c'+(++CID), name, root, bones, isDemo, weapons:[], jointMarkers:[], helper:null, selectedBone:null, rest:{} };
+  const rec={ id:'c'+(++CID), name, root, bones, isDemo, weapons:[], jointMarkers:[], helper:null, selectedBone:null, rest:{}, roleMap:{}, roleConfirmed:false, roleExtra:{} };
   // capture bind/rest pose (local quaternion + position per bone) so reset is exact
   bones.forEach(b=>{ rec.rest[b.name]={ q:b.quaternion.toArray(), p:b.position.toArray() }; });
   // skeleton helper
@@ -460,6 +512,7 @@ function finalizeCharacter(name, root, bones, isDemo){
   });
   scene.add(root);
   CHARS.push(rec);
+  const pr=proposeRoleMap(rec); rec.roleMap=pr.map; rec.roleExtra=pr.extra;  // auto-propose roles on load
   return rec;
 }
 
@@ -475,7 +528,7 @@ function removeCharacter(id){
 
 function setActiveChar(id){
   activeCharId=id;
-  selBoneName=null; selWeaponId=null; tc.detach(); anchorMode=null;
+  selBoneName=null; selWeaponId=null; tc.detach(); anchorMode=null; roleAssignMode=null;
   const c=activeChar();
   CHARS.forEach(x=>{ const on=(x.id===id); x.root.visible=on; if(x.helper)x.helper.visible=on; });
   if(c){ selBoneName=c.selectedBone||resolveRole(c,'hand'); c.selectedBone=selBoneName; frameCharacter(c); }
@@ -645,6 +698,127 @@ function applyPreset(w, p){
   buildAnchorMarkers(w);
 }
 
+// ============================================================ role tagging (v3)
+function bWorld(b){ const v=new THREE.Vector3(); b.getWorldPosition(v); return v; }
+function bChildren(b){ return b.children.filter(x=>x.isBone); }
+function bDesc(b){ let n=0; bChildren(b).forEach(ch=>{ n+=1+bDesc(ch); }); return n; }
+function longestChain(b){ let best=[b]; bChildren(b).forEach(ch=>{ const sub=longestChain(ch); if(1+sub.length>best.length) best=[b].concat(sub); }); return best; }
+// follow the most-VERTICAL child each step (the spine goes up; arms are horizontal so they score low)
+function verticalChain(start){
+  const chain=[start]; let cur=start;
+  for(let guard=0; guard<64; guard++){
+    const kids=bChildren(cur); if(!kids.length) break;
+    const cw=bWorld(cur); let best=null, bestScore=-Infinity;
+    kids.forEach(k=>{ const kw=bWorld(k); const score=(kw.y-cw.y) - Math.hypot(kw.x-cw.x, kw.z-cw.z)*0.6; if(score>bestScore){ bestScore=score; best=k; } });
+    if(!best) break; chain.push(best); cur=best;
+  }
+  return chain;
+}
+function roleOfBone(c, boneName){ const m=c.roleMap||{}; return Object.keys(m).find(r=>m[r]===boneName)||null; }
+
+// auto-propose a roleMap from skeleton structure (no labels exist — geometry + name heuristics)
+function proposeRoleMap(c){
+  c.root.updateMatrixWorld(true);
+  const map={}, extra={}, used=new Set();
+  const byName={}; c.bones.forEach(b=>byName[b.name]=b);
+  const set=(role,b)=>{ if(b && !map[role]){ map[role]=b.name; used.add(b.name); } };
+  // (a) exact name-match to canonical roles (perfect for the demo rig + sanely-named GLBs)
+  ALL_ROLES.forEach(role=>{ if(byName[role]) set(role, byName[role]); });
+  // (b) geometric fill, anchored on the root bone -> hips
+  if(!map['hips']){
+    const roots=c.bones.filter(b=>!(b.parent&&b.parent.isBone));
+    if(roots.length) assignRolesFrom(c, roots.slice().sort((a,b)=>bDesc(b)-bDesc(a))[0], map, extra, used, set);
+  }
+  // (c) anything still unmapped -> extra, grouped by nearest mapped ancestor role
+  c.bones.forEach(b=>{ if(used.has(b.name)) return; let p=b.parent, role=null;
+    while(p&&p.isBone){ const r=Object.keys(map).find(k=>map[k]===p.name); if(r){role=r;break;} p=p.parent; }
+    const key=role||'root'; (extra[key]=extra[key]||[]).push(b.name); });
+  return { map, extra };
+}
+function assignRolesFrom(c, hips, map, extra, used, set){
+  if(!hips) return; set('hips',hips);
+  const hw=bWorld(hips); const kids=bChildren(hips);
+  const up=kids.filter(b=>bWorld(b).y>=hw.y), down=kids.filter(b=>bWorld(b).y<hw.y);
+  const spineStart=up.slice().sort((a,b)=>bDesc(b)-bDesc(a))[0];
+  if(spineStart){
+    const chain=verticalChain(spineStart);          // [spine..., chest, neck, head] — vertical, not the longest (arm) path
+    let chestIdx=-1;
+    for(let i=0;i<chain.length;i++){ const side=bChildren(chain[i]).filter(k=>k!==chain[i+1]); if(side.length>=2){ chestIdx=i; break; } }
+    if(chestIdx<0) chestIdx=Math.min(2, chain.length-1);
+    const pre=chain.slice(0,chestIdx);
+    if(pre[0]) set('spine',pre[0]); if(pre[1]) set('spine2',pre[1]);
+    set('chest',chain[chestIdx]);
+    const post=chain.slice(chestIdx+1);
+    if(post.length>=2){ set('neck',post[0]); set('head',post[post.length-1]); } else if(post.length===1){ set('head',post[0]); }
+    const chest=chain[chestIdx], cw=bWorld(chest);
+    bChildren(chest).filter(k=>k!==chain[chestIdx+1]).forEach(a=>assignLimb(longestChain(a), bWorld(a).x>=cw.x?'R':'L', 'arm', map, used, set));
+  }
+  down.forEach(l=>assignLimb(longestChain(l), bWorld(l).x>=hw.x?'R':'L', 'leg', map, used, set));
+}
+function assignLimb(chain, side, kind, map, used, set){
+  const arm=['shoulder.'+side,'upperArm.'+side,'foreArm.'+side,'hand.'+side];
+  const leg=['upperLeg.'+side,'lowerLeg.'+side,'foot.'+side,'toe.'+side];
+  if(kind==='arm'){
+    if(chain.length>=4) arm.forEach((r,i)=>set(r,chain[i]));
+    else if(chain.length===3){ set('upperArm.'+side,chain[0]); set('foreArm.'+side,chain[1]); set('hand.'+side,chain[2]); }
+    else if(chain.length===2){ set('upperArm.'+side,chain[0]); set('hand.'+side,chain[1]); }
+    else if(chain.length===1) set('upperArm.'+side,chain[0]);
+  } else {
+    if(chain.length>=4) leg.forEach((r,i)=>set(r,chain[i]));
+    else if(chain.length===3){ set('upperLeg.'+side,chain[0]); set('lowerLeg.'+side,chain[1]); set('foot.'+side,chain[2]); }
+    else if(chain.length===2){ set('upperLeg.'+side,chain[0]); set('foot.'+side,chain[1]); }
+    else if(chain.length===1) set('upperLeg.'+side,chain[0]);
+  }
+}
+
+// ============================================================ canonical pose library (v3)
+// capture current rotations as role-keyed local Δ-quats (restQ⁻¹ · poseQ)
+function capturePose(c){
+  const roles={};
+  Object.keys(c.roleMap||{}).forEach(role=>{
+    const bn=c.roleMap[role]; const b=boneByName(c,bn); const rest=c.rest&&c.rest[bn];
+    if(!b||!rest) return;
+    const rq=new THREE.Quaternion().fromArray(rest.q);
+    const d=rq.clone().invert().multiply(b.quaternion.clone());
+    roles[role]=[r4(d.x),r4(d.y),r4(d.z),r4(d.w)];
+  });
+  return roles;
+}
+// apply a canonical pose to the active character via its roleMap, slerped from rest by blend t
+function applyCanonicalPose(c, pose, t){
+  t=(t==null?1:t);
+  Object.keys(pose.roles||{}).forEach(role=>{
+    const bn=(c.roleMap||{})[role]; if(!bn) return; const b=boneByName(c,bn); const rest=c.rest&&c.rest[bn]; if(!b||!rest) return;
+    const rq=new THREE.Quaternion().fromArray(rest.q);
+    const target=rq.clone().multiply(new THREE.Quaternion().fromArray(pose.roles[role]));
+    b.quaternion.copy(new THREE.Quaternion().slerpQuaternions(rq, target, t));
+  });
+  c.root.updateMatrixWorld(true);
+}
+
+function proposeRolesForActive(){ const c=activeChar(); if(!c) return; const pr=proposeRoleMap(c); c.roleMap=pr.map; c.roleExtra=pr.extra; c.roleConfirmed=false; roleAssignMode=null; renderRoles(); renderPoses(); persistSoon(); toast('Roles proposed'); }
+function enterRoleAssign(role){ const c=activeChar(); if(!c) return; roleAssignMode=role; if(c.roleMap[role]){ selBoneName=c.roleMap[role]; c.selectedBone=selBoneName; selWeaponId=null; applyGizmo(); } updateBanner(); renderRoles(); renderInspector(); }
+function clearRole(role){ const c=activeChar(); if(!c) return; delete c.roleMap[role]; c.roleConfirmed=false; if(roleAssignMode===role){ roleAssignMode=null; updateBanner(); } renderRoles(); renderPoses(); persistSoon(); }
+function assignBoneToRole(boneName){
+  const c=activeChar(); if(!c||!roleAssignMode) return;
+  Object.keys(c.roleMap).forEach(r=>{ if(c.roleMap[r]===boneName && r!==roleAssignMode) delete c.roleMap[r]; });
+  c.roleMap[roleAssignMode]=boneName; c.roleConfirmed=false;
+  selBoneName=boneName; c.selectedBone=boneName;
+  roleAssignMode=null; updateBanner(); applyGizmo(); renderRoles(); renderPoses(); refreshInspector(); persistSoon(); toast('Assigned “'+boneName+'”');
+}
+function confirmRoles(){ const c=activeChar(); if(!c) return; c.roleConfirmed=true; const un=[...ROLE_REQUIRED].filter(r=>!c.roleMap[r]); persistSoon(); renderRoles(); renderPoses(); toast(un.length?('Confirmed · '+un.length+' required unmapped'):'Roles confirmed'); }
+function exportRoleMap(){ const c=activeChar(); if(!c){ toast('Load a character'); return; }
+  download({ format:'sprite-motion.roleMap', version:1, skeleton:c.name.replace(/\s*\(.*\)$/,''), space:'gltf-y-up', confirmed:!!c.roleConfirmed, map:c.roleMap||{}, extra:c.roleExtra||{} }, 'sprite-motion.roleMap.json'); toast('Exported roleMap'); }
+function saveCurrentPose(){
+  const c=activeChar(); if(!c||!c.roleConfirmed){ toast('Confirm roles first'); return; }
+  const name=prompt('Pose name (combat keys: '+COMBAT_POSES.join(', ')+'):','guard'); if(!name||!name.trim()) return;
+  POSES.push({ format:'sprite-motion.pose', version:1, name:name.trim(), blend:1.0, space:'role-local-delta', roles:capturePose(c) });
+  renderPoses(); persistSoon(); toast('Saved pose “'+name.trim()+'”');
+}
+function exportPoseLibrary(){ if(!POSES.length){ toast('No poses'); return; }
+  download(POSES.map(p=>({ format:'sprite-motion.pose', version:1, name:p.name, blend:(p.blend!=null?p.blend:1.0), space:'role-local-delta', roles:p.roles })), 'sprite-motion.pose-library.json'); toast('Exported pose library'); }
+function applyPoseByIndex(i){ const c=activeChar(); const p=POSES[i]; if(!c||!p) return; const t=parseFloat($('#poseBlend').value); applyCanonicalPose(c,p,t); p.blend=t; refreshInspector(); persistSoon(); toast('Applied “'+p.name+'”'); }
+
 // ============================================================ gizmo change + snap
 function onGizmoChange(){
   if(gizmoTargetType()==='bone'){ syncBoneInspectorLive(); return; }
@@ -663,32 +837,6 @@ function onGizmoChange(){
 let altDown=false;
 addEventListener('keydown',e=>{ if(e.key==='Alt') altDown=true; });
 addEventListener('keyup',e=>{ if(e.key==='Alt') altDown=false; });
-
-// arrow-key posing — rotate the selected bone (or weapon) around WORLD axes. Reliable + precise,
-// independent of grabbing the gizmo rings. Up/Down = pitch, Left/Right = yaw, Ctrl+L/R = roll, Shift = fine.
-addEventListener('keydown',e=>{
-  if(!e.key || e.key.slice(0,5)!=='Arrow') return;
-  if(e.target && (e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA')) return;
-  const c=activeChar(); if(!c) return;
-  const w=selWeapon();
-  const target = w ? w.object : (selBoneName ? boneByName(c,selBoneName) : null);
-  if(!target) return;
-  e.preventDefault();
-  const a=(e.shiftKey?1:5)*Math.PI/180;
-  let ax, s;
-  if(e.key==='ArrowUp'){ ax=new THREE.Vector3(1,0,0); s=-1; }
-  else if(e.key==='ArrowDown'){ ax=new THREE.Vector3(1,0,0); s=1; }
-  else if(e.key==='ArrowLeft'){ ax=(e.ctrlKey||e.metaKey)?new THREE.Vector3(0,0,1):new THREE.Vector3(0,1,0); s=1; }
-  else if(e.key==='ArrowRight'){ ax=(e.ctrlKey||e.metaKey)?new THREE.Vector3(0,0,1):new THREE.Vector3(0,1,0); s=-1; }
-  else return;
-  const parent=target.parent;
-  const pwq = parent ? parent.getWorldQuaternion(new THREE.Quaternion()) : new THREE.Quaternion();
-  const qW = new THREE.Quaternion().setFromAxisAngle(ax, s*a);
-  target.quaternion.premultiply(pwq.clone().invert().multiply(qW).multiply(pwq));   // rotate about the world axis
-  target.updateMatrixWorld(true);
-  onGizmoChange();
-  if(typeof persistSoon==='function') persistSoon();
-});
 
 function trySnap(w){
   const c=activeChar(); if(!c) return;
@@ -768,7 +916,9 @@ renderer.domElement.addEventListener('pointerup',e=>{
   const markers=c.jointMarkers;
   const jhits=ray.intersectObjects(markers, false);
   if(jhits.length){
-    selectBone(jhits[0].object.userData.boneName); return;
+    const bn=jhits[0].object.userData.boneName;
+    if(roleAssignMode){ assignBoneToRole(bn); return; }
+    selectBone(bn); return;
   }
   // weapon meshes -> select weapon
   for(const w of c.weapons){
@@ -779,9 +929,9 @@ renderer.domElement.addEventListener('pointerup',e=>{
   deselectAll();
 });
 
-// double-click anywhere near a joint -> select that bone (forgiving; the markers are small to hit precisely)
+// double-click anywhere near a joint -> select that bone (forgiving; markers are small to hit precisely)
 renderer.domElement.addEventListener('dblclick',e=>{
-  if(tc.dragging || tc.axis) return;                    // don't hijack an in-progress gizmo interaction
+  if(tc.dragging || tc.axis || roleAssignMode) return;   // don't hijack a gizmo grab or a role-assign click
   const c=activeChar(); if(!c||!c.jointMarkers||!c.jointMarkers.length) return;
   const rect=renderer.domElement.getBoundingClientRect();
   const cx=e.clientX-rect.left, cy=e.clientY-rect.top;
@@ -794,7 +944,7 @@ renderer.domElement.addEventListener('dblclick',e=>{
     const d=Math.hypot(sx-cx, sy-cy);
     if(d<bestD){ bestD=d; best=mk; }
   }
-  if(best && bestD<=42){ if(best.userData.boneName!==selBoneName) selectBone(best.userData.boneName); e.preventDefault(); return; }  // already selected -> leave the gizmo grab intact
+  if(best && bestD<=42){ if(best.userData.boneName!==selBoneName) selectBone(best.userData.boneName); e.preventDefault(); return; }
   setNdc(e); ray.setFromCamera(ndc, activeCam);          // fall back: double-click a weapon selects it
   for(const w of c.weapons){ if(ray.intersectObject(w.object,true).length){ selectWeapon(w.id); return; } }
 });
@@ -805,7 +955,8 @@ function updateReadout(e){
   let html='';
   const b=boneByName(c, selBoneName);
   if(b){ const bw=new THREE.Vector3(); b.getWorldPosition(bw);
-    html+=`<span class="am">${selBoneName}</span>  <span class="hl">${fmt(bw.x)} ${fmt(bw.y)} ${fmt(bw.z)}</span><br>`; }
+    const role=c?roleOfBone(c,selBoneName):null;
+    html+=`<span class="am">${selBoneName}</span>${role?` <span class="hl">[${role}]</span>`:''}  <span class="hl">${fmt(bw.x)} ${fmt(bw.y)} ${fmt(bw.z)}</span><br>`; }
   const w=selWeapon();
   if(w){ const ap=attachPoint(c,w); html+=`attach  <span class="am">${fmt(ap[0])} ${fmt(ap[1])} ${fmt(ap[2])}</span>`; }
   if(!html) html='<span style="color:var(--dim2)">load a character to begin</span>';
@@ -1074,10 +1225,12 @@ function serializeProject(){
   return {
     format:'sprite-motion.project3d', version:4, activeCharId, viewMode,
     presets:PRESETS.map(p=>JSON.parse(JSON.stringify(p))),
+    poses:POSES.map(p=>JSON.parse(JSON.stringify(p))),
     library:LIB.map(l=>({ id:l.id, name:l.name, isBox:!!l.isBox, gripLocal:l.gripLocal, tipLocal:l.tipLocal,
       glb: glbCache['lib_'+l.id]? bufToB64(glbCache['lib_'+l.id]) : null })),
     characters:CHARS.map(c=>({
       id:c.id, name:c.name, isDemo:c.isDemo, selectedBone:c.selectedBone,
+      roleMap:c.roleMap||{}, roleConfirmed:!!c.roleConfirmed, roleExtra:c.roleExtra||{},
       pose: serializeCharPose(c),
       glb: glbCache[c.id]? bufToB64(glbCache[c.id]) : null,
       weapons:c.weapons.map(w=>({ id:w.id, libId:w.libId, asset:w.asset, bone:w.bone,
@@ -1119,13 +1272,14 @@ function autosave(){
 
 function clearAll(){
   CHARS.slice().forEach(c=>removeCharacter(c.id));
-  CHARS=[]; LIB=[]; activeCharId=null; selBoneName=null; selWeaponId=null; tc.detach();
+  CHARS=[]; LIB=[]; POSES=[]; activeCharId=null; selBoneName=null; selWeaponId=null; roleAssignMode=null; tc.detach();
   CID=0;LID=0;WID=0; for(const k in glbCache) delete glbCache[k];
 }
 
 function deserializeProject(data, done){
   clearAll();
   PRESETS=(data.presets&&data.presets.length)?data.presets.map(p=>JSON.parse(JSON.stringify(p))):BUILTIN_PRESETS.map(p=>JSON.parse(JSON.stringify(p)));
+  POSES=(data.poses||[]).map(p=>JSON.parse(JSON.stringify(p)));
   // library
   const libMap={};
   let pending=0, finished=false;
@@ -1141,11 +1295,11 @@ function deserializeProject(data, done){
   function afterChars(){ if(cpend===0){ finished=true; tryFinish(); finalizeLoad(); } }
   charDefs.forEach(cd=>{
     if(cd.isDemo || !cd.glb){
-      const rec=buildDemoRig(); rec.name=cd.name||rec.name; rec._loadId=cd.id; rec.selectedBone=cd.selectedBone||null; applyPoseToRec(rec, cd.pose); charRecs[cd.id]=rec; rec._wdefs=cd.weapons||[];
+      const rec=buildDemoRig(); rec.name=cd.name||rec.name; rec._loadId=cd.id; rec.selectedBone=cd.selectedBone||null; applyPoseToRec(rec, cd.pose); if(cd.roleMap){ rec.roleMap=cd.roleMap; rec.roleConfirmed=!!cd.roleConfirmed; rec.roleExtra=cd.roleExtra||{}; } charRecs[cd.id]=rec; rec._wdefs=cd.weapons||[];
     } else {
       cpend++; loader.parse(b64ToBuf(cd.glb),'',(g)=>{ const bones=[]; g.scene.traverse(o=>{if(o.isBone)bones.push(o);});
         const rec=finalizeCharacter(cd.name, g.scene, bones, false); glbCache[rec.id]=b64ToBuf(cd.glb);
-        rec._loadId=cd.id; rec.selectedBone=cd.selectedBone||null; applyPoseToRec(rec, cd.pose); charRecs[cd.id]=rec; rec._wdefs=cd.weapons||[]; cpend--; afterChars(); });
+        rec._loadId=cd.id; rec.selectedBone=cd.selectedBone||null; applyPoseToRec(rec, cd.pose); if(cd.roleMap){ rec.roleMap=cd.roleMap; rec.roleConfirmed=!!cd.roleConfirmed; rec.roleExtra=cd.roleExtra||{}; } charRecs[cd.id]=rec; rec._wdefs=cd.weapons||[]; cpend--; afterChars(); });
     }
   });
   function placeAllWeapons(){
@@ -1192,9 +1346,9 @@ function tick(){
       mk.scale.setScalar(clamp(s,0.006,0.2)/Math.max(ws.x,0.0001));
       const sel=(c.id===activeCharId && mk.userData.boneName===selBoneName);
       mk.material.color.setHex(sel?0xf0a830:0xcfd6dd);
-      mk.material.depthTest=!sel; mk.material.depthWrite=!sel;   // selected joint renders ON TOP (visible through the mesh)
-      mk.renderOrder=sel?999:20;
-      mk.scale.multiplyScalar(sel?2.4:1.0);
+      mk.material.depthTest=!sel;            // selected joint draws on top of the mesh
+      mk.renderOrder=sel?40:20;
+      mk.scale.multiplyScalar(sel?1.6:1.0);
     });
   });
   if(snapRing.visible) snapRing.quaternion.copy(activeCam.quaternion);
@@ -1202,7 +1356,7 @@ function tick(){
 }
 
 // ============================================================ UI rendering
-function refreshAll(){ renderCharList(); renderBoneList(); renderLibList(); renderInspector(); renderPresetList(); updateCounts(); updateReadout({}); refreshToolbarCam(); }
+function refreshAll(){ renderCharList(); renderBoneList(); renderRoles(); renderLibList(); renderInspector(); renderPresetList(); renderPoses(); updateCounts(); updateReadout({}); refreshToolbarCam(); }
 function updateCounts(){
   $('#charCnt').textContent=CHARS.length;
   const c=activeChar();
@@ -1276,6 +1430,52 @@ function renderPresetList(){
 
 function esc(s){ return String(s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m])); }
 
+// ---- roles panel ----
+function renderRoles(){
+  const c=activeChar(); const head=$('#roleHead'); const list=$('#roleList');
+  if(!c){ head.innerHTML=''; list.innerHTML='<div class="empty">Load a character.</div>'; $('#roleCnt').textContent='0'; return; }
+  const map=c.roleMap||{};
+  const unmappedReq=[...ROLE_REQUIRED].filter(r=>!map[r]);
+  $('#roleCnt').textContent=Object.keys(map).length;
+  head.innerHTML=`<span class="k">confirmed</span><span class="v ${c.roleConfirmed?'':'amber'}">${c.roleConfirmed?'yes':'no'}</span>`;
+  let rows='';
+  ROLE_GROUPS.forEach(([g,roles])=>{
+    rows+=`<div class="rolegrp">${g}</div>`;
+    roles.forEach(role=>{
+      const bn=map[role]; const req=ROLE_REQUIRED.has(role);
+      const val= bn? `<span class="rbone">${esc(bn)}</span><button class="icbtn rclr" data-clr="${role}" title="unassign">&#10005;</button>`
+                   : `<span class="rmiss ${req?'req':''}">&mdash;</span>`;
+      rows+=`<div class="rolerow${roleAssignMode===role?' sel':''}" data-role="${role}"><span class="jd"></span><span class="rname">${role}</span>${val}</div>`;
+    });
+  });
+  list.innerHTML=(unmappedReq.length?`<div class="rolewarn">${unmappedReq.length} required role(s) unmapped</div>`:'')+rows;
+  list.querySelectorAll('.rolerow').forEach(row=>row.addEventListener('click',e=>{ if(e.target.closest('[data-clr]')) return; enterRoleAssign(row.dataset.role); }));
+  list.querySelectorAll('[data-clr]').forEach(b=>b.addEventListener('click',e=>{ e.stopPropagation(); clearRole(b.dataset.clr); }));
+}
+
+// ---- pose library panel ----
+function renderPoses(){
+  const c=activeChar(); const gate=$('#poseGate'); const body=$('#poseBody');
+  $('#poseCnt').textContent=POSES.length;
+  const ok=c&&c.roleConfirmed;
+  if(!ok){ gate.classList.remove('hidden'); body.classList.add('hidden'); gate.innerHTML = c? 'Confirm the role map to author reusable poses.' : 'Load a character.'; return; }
+  gate.classList.add('hidden'); body.classList.remove('hidden');
+  const list=$('#poseList');
+  if(!POSES.length){ list.innerHTML='<div class="empty">No poses. Pose the rig, then <b>Save current pose</b>.</div>'; return; }
+  list.innerHTML='';
+  POSES.forEach((p,i)=>{
+    const row=document.createElement('div'); row.className='listrow';
+    row.innerHTML=`<span class="nm" style="font-family:var(--mono);font-size:11px">${esc(p.name)}</span><span class="sub">${Object.keys(p.roles||{}).length}r</span>
+      <button class="icbtn" data-ap="${i}" title="apply (blend)">&#8594;</button>
+      <button class="icbtn" data-rn="${i}" title="rename">&#9998;</button>
+      <button class="icbtn" data-dl="${i}" title="delete">&#10005;</button>`;
+    row.querySelector('[data-ap]').addEventListener('click',()=>applyPoseByIndex(i));
+    row.querySelector('[data-rn]').addEventListener('click',()=>{ const n=prompt('Rename pose:',p.name); if(n&&n.trim()){ p.name=n.trim(); renderPoses(); persistSoon(); } });
+    row.querySelector('[data-dl]').addEventListener('click',()=>{ if(confirm('Delete pose "'+p.name+'"?')){ POSES.splice(i,1); renderPoses(); persistSoon(); } });
+    list.appendChild(row);
+  });
+}
+
 // ---- inspector ----
 function renderInspector(){
   const el=$('#inspector'); const c=activeChar(); const w=selWeapon();
@@ -1336,8 +1536,13 @@ function renderInspector(){
 function setArm(){
   const g=$('#armGrip'), t=$('#armTip'); if(g){ g.classList.toggle('armed', anchorMode==='grip'); }
   if(t){ t.classList.toggle('armed', anchorMode==='tip'); }
+  updateBanner();
+}
+// one banner for both weapon-anchor pick mode and role-assign mode
+function updateBanner(){
   const a=$('#vp-arm');
   if(anchorMode){ a.classList.add('show'); a.textContent='Click the weapon mesh to set the '+anchorMode.toUpperCase()+' point  ·  Esc to cancel'; }
+  else if(roleAssignMode){ a.classList.add('show'); a.textContent='Click a joint to assign to role \u201c'+roleAssignMode+'\u201d  \u00b7  Esc to cancel'; }
   else a.classList.remove('show');
 }
 // lightweight live sync (no full re-render) during gizmo drag / field edits
@@ -1361,8 +1566,10 @@ function renderBoneInspector(el,c){
   const isRoot=boneIsRoot(b);
   const eu=new THREE.Euler().setFromQuaternion(b.quaternion,'XYZ'); const deg=v=>r4(v*180/Math.PI);
   const p=b.position; const wp=new THREE.Vector3(); b.getWorldPosition(wp);
+  const role=roleOfBone(c,b.name);
   el.innerHTML=`
     <div class="kv" style="border-top:none"><span class="k">posing bone</span><span class="v amber">${esc(b.name)}</span></div>
+    <div class="kv"><span class="k">role</span><span class="v ${role?'amber':''}">${role?esc(role):'unmapped'}</span></div>
     <div class="kv"><span class="k">world (x,y,z)</span><span class="v">${fmt(wp.x)},${fmt(wp.y)},${fmt(wp.z)}</span></div>
     <div class="field" style="margin-top:10px"><label>rotation · local euler°</label>
       <div class="axislab"><span>x</span><span>y</span><span>z</span></div>
@@ -1429,6 +1636,15 @@ $('#fileProj').addEventListener('change',e=>{ const f=e.target.files[0]; if(!f) 
 
 $('#boneSearch').addEventListener('input',e=>{ boneFilter=e.target.value; renderBoneList(); });
 
+// roles + poses wiring
+$('#btnPropose').addEventListener('click',proposeRolesForActive);
+$('#btnConfirmRoles').addEventListener('click',confirmRoles);
+$('#btnExportRoles').addEventListener('click',exportRoleMap);
+$('#btnSavePose').addEventListener('click',saveCurrentPose);
+$('#btnExportPoses').addEventListener('click',exportPoseLibrary);
+$('#poseBlend').addEventListener('input',()=>{ $('#poseBlendN').value=parseFloat($('#poseBlend').value).toFixed(2); });
+$('#poseBlendN').addEventListener('change',()=>{ const v=clamp(parseFloat($('#poseBlendN').value)||1,0,1); $('#poseBlend').value=v; $('#poseBlendN').value=v.toFixed(2); });
+
 // collapsible panels
 $$('.panel-h').forEach(h=>h.addEventListener('click',()=>h.parentElement.classList.toggle('collapsed')));
 
@@ -1457,6 +1673,15 @@ function buildPalette(){
   ['N','NE','E','SE','S','SW','W','NW'].forEach(d=>A('Camera: '+d,'camera',()=>setCameraDir(d)));
   A('Camera: Free orbit','camera',()=>setCameraDir('Free'));
   A('Render contact sheet','verify',renderContactSheet);
+  A('Roles: auto-propose','roles',proposeRolesForActive);
+  A('Roles: confirm','roles',confirmRoles);
+  A('Roles: export roleMap','roles',exportRoleMap);
+  if(c){ ALL_ROLES.forEach(role=>A('Assign role: '+role,'roles',()=>enterRoleAssign(role))); }
+  if(c&&c.roleConfirmed){
+    A('Pose: save current…','pose',saveCurrentPose);
+    A('Pose: export library','pose',exportPoseLibrary);
+    POSES.forEach((p,i)=>A('Apply pose: '+p.name,'pose',()=>applyPoseByIndex(i)));
+  }
   if(w){
     A('Set grip anchor (click mesh)','weapon',()=>{ anchorMode='grip'; setArm(); toast('Click the weapon to set grip'); });
     A('Set tip anchor (click mesh)','weapon',()=>{ anchorMode='tip'; setArm(); toast('Click the weapon to set tip'); });
@@ -1499,7 +1724,15 @@ $('#palette').addEventListener('mousedown',e=>{ if(e.target.id==='palette') clos
 addEventListener('keydown',e=>{
   if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='k'){ e.preventDefault(); openPalette(); return; }
   const tag=(e.target.tagName||'').toLowerCase(); if(tag==='input'||tag==='textarea') return;
-  if(e.key==='Escape'){ if(anchorMode){ anchorMode=null; setArm(); } closePalette(); }
+  if(e.key==='Escape'){ if(anchorMode){ anchorMode=null; setArm(); } if(roleAssignMode){ roleAssignMode=null; updateBanner(); renderRoles(); } closePalette(); return; }
+  // arrow keys rotate the selected bone (FK nudge)
+  if(gizmoTargetType()==='bone' && e.key.indexOf('Arrow')===0){
+    const b=boneByName(activeChar(),selBoneName); if(b){ const s=(e.shiftKey?2:7)*Math.PI/180;
+      if(e.key==='ArrowLeft') b.rotateY(s); else if(e.key==='ArrowRight') b.rotateY(-s);
+      else if(e.key==='ArrowUp') b.rotateX(-s); else if(e.key==='ArrowDown') b.rotateX(s);
+      b.updateMatrixWorld(true); syncBoneInspectorLive(); persistSoon(); e.preventDefault(); }
+    return;
+  }
   const k=e.key.toLowerCase();
   if(k==='g'||k==='1') setGizmo('translate');
   else if(k==='r'||k==='2') setGizmo('rotate');
@@ -1520,7 +1753,7 @@ function boot(){
   tick();
 }
 boot();
-window.__sm = { CHARS, LIB, PRESETS, attachPoint, tipPoint, rootTransformOf, poseForChar, activeChar, selWeapon, selectBone, resetPose, setView, setGizmo, loadReferenceImage, placementForChar, serializeProject, setCameraDir, get sel(){return {selBoneName,selWeaponId,cameraDir,viewMode,gizmoMode};} };
+window.__sm = { CHARS, LIB, PRESETS, get POSES(){return POSES;}, attachPoint, tipPoint, rootTransformOf, poseForChar, proposeRoleMap, capturePose, applyCanonicalPose, confirmRoles, enterRoleAssign, assignBoneToRole, exportRoleMap, activeChar, selWeapon, selectBone, resetPose, setView, setGizmo, loadReferenceImage, placementForChar, serializeProject, setCameraDir, get sel(){return {selBoneName,selWeaponId,cameraDir,viewMode,gizmoMode,roleAssignMode};} };
 </script>
 </body>
 </html>
