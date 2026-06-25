@@ -1,9 +1,7 @@
-node_modules/
-dist/
-dist-ssr/
-*.local
+# OS / editor cruft
 .DS_Store
 *.log
-.vite/
+
+# Python pipeline
 __pycache__/
 *.pyc
