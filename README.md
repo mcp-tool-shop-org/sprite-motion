@@ -91,12 +91,13 @@ The editor is the **placement authority**; the headless Blender step is the **ap
 | [`app/sprite-motion.html`](app/sprite-motion.html) | **The editor** — self-contained offline HTML. Open it in any browser; double-right-click (or `Ctrl/⌘K`) for the command palette. |
 | [`app/sprite-motion.slim.html`](app/sprite-motion.slim.html) | Same editor, ~65 KB (sample images stubbed) — the build to **attach to Claude Design** for v2 work. |
 | [`pipeline/export_skeleton.py`](pipeline/export_skeleton.py) | Blender: dump a rigged GLB's armature → the skeleton JSON the editor loads (exact numbers). |
-| [`pipeline/apply_placement.py`](pipeline/apply_placement.py) | Blender: consume a single-character placement, or **all placements** (whole roster, via `--manifest`) → attach each weapon GLB at its exact `attachPoint` (rotation + scale) → game-ready GLB. |
+| [`pipeline/apply_placement.py`](pipeline/apply_placement.py) | Blender: consume a single-character placement, or **all placements** (whole roster, via `--manifest`) → attach each weapon GLB at its exact `attachPoint` (rotation + scale), building a non-deform `weapon_grip → weapon_tip` chain (heads at the grip + the business end, for hit-box data) → game-ready GLB. |
 | [`pipeline/placement.example.json`](pipeline/placement.example.json) | Example single-character export (`--placement` for one char + `--char`). |
 | [`pipeline/placements.example.json`](pipeline/placements.example.json) | Example roster export ("Export all placements"). |
 | [`pipeline/manifest.example.json`](pipeline/manifest.example.json) | Template: skeleton names + weapon assets → rigged GLBs, for the roster run. |
 | [`docs/claude-design-prompt.md`](docs/claude-design-prompt.md) | v1 build spec — paste into Claude Design, attach the three sample files, build the editor as standalone HTML. |
 | [`docs/claude-design-prompt-v2.md`](docs/claude-design-prompt-v2.md) | v2 build spec (expand the editor) — multi-character + bulk, reusable weapon/prop library, project save/load. Attach `app/sprite-motion.slim.html` and extend. |
+| [`docs/claude-design-prompt-v3.md`](docs/claude-design-prompt-v3.md) | v3 build spec (precision) — snapping, depth/Y + 2.5D preview, weapon presets, weapon-tip anchor. KB-grounded (rigging 2.5D camera + weapon_tip; combat-craft silhouette). |
 | `public/samples/blackguard.skeleton.json` | Real 40-bone skeleton (the embedded sample). |
 | `public/samples/blackguard.front.png` | Body sprite for the reference layer. |
 | `public/samples/halberd.png` | Transparent halberd prop. |

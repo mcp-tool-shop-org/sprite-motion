@@ -66,11 +66,17 @@ def place(w, arm, figureH, assets):
     hal.rotation_euler = (0, math.radians(w.get("rotationDeg", 0)), 0)   # in-plane (about depth axis)
     hal.location = V((ap[0], ap[1], ap[2]))
     bpy.context.view_layer.update()
-    handlocal = arm.data.bones[bone].head_local.copy()
+    # weapon_grip (HEAD at the grip) -> weapon_tip (HEAD at the business end). glTF stores joint HEADS,
+    # not tails, so the meaningful positions go in the heads (KB rigging: the tip joint feeds hit-box / tip-velocity).
+    Minv = arm.matrix_world.inverted(); apw = V((ap[0], ap[1], ap[2]))
+    MW = mathutils.Matrix.Translation(apw) @ mathutils.Euler((0, math.radians(w.get("rotationDeg", 0)), 0), 'XYZ').to_matrix().to_4x4()
+    tipw = max((MW @ v.co for v in hal.data.vertices), key=lambda p: (p - apw).length)  # weapon's far end = business tip
+    grip_local = Minv @ apw; tip_local = Minv @ tipw   # TODO: refine via the editor's tipAnchor when v3 ships
+    d = tip_local - grip_local; L = d.length; d = d / L if L > 1e-5 else V((0, 0, 1))
     bpy.context.view_layer.objects.active = arm; bpy.ops.object.mode_set(mode='EDIT')
     eb = arm.data.edit_bones; hb = eb[bone]; gn = "weapon_grip_" + asset; tn = "weapon_tip_" + asset
-    g = eb.new(gn); g.head = handlocal; g.tail = handlocal + V((0, 0, 0.12)); g.parent = hb; g.use_deform = False; g.use_connect = False
-    t = eb.new(tn); t.head = g.tail; t.tail = g.tail + V((0, 0, 0.30)); t.parent = g; t.use_deform = False; t.use_connect = False
+    g = eb.new(gn); g.head = grip_local; g.tail = grip_local + d * max(0.08, L * 0.3); g.parent = hb; g.use_deform = False; g.use_connect = False
+    t = eb.new(tn); t.head = tip_local; t.tail = tip_local + d * 0.05; t.parent = g; t.use_deform = False; t.use_connect = False
     bpy.ops.object.mode_set(mode='OBJECT')
     bpy.ops.object.select_all(action='DESELECT'); hal.select_set(True); arm.select_set(True); bpy.context.view_layer.objects.active = arm
     arm.data.bones.active = arm.data.bones[gn]
