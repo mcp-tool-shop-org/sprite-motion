@@ -1,0 +1,39 @@
+{
+  "_note": "AUTO-PROPOSED role map for the blackguard, derived from its UniRig skeleton (bone hierarchy + positions, see public/samples/blackguard.skeleton.json). This is the 'auto-propose' half of the design (F1/F2 — auto-riggers emit no roles, so we infer them); the editor's role-tagging UI is where a human CONFIRMS/overrides. Coords are gltf-y-up. 'extra' bones (fingers) are real but outside the canonical humanoid profile — hand-posed or mapped per-need.",
+  "format": "sprite-motion.roleMap",
+  "version": 1,
+  "skeleton": "blackguard_dec_rigged",
+  "space": "gltf-y-up",
+  "confirmed": false,
+  "map": {
+    "hips": "bone_0",
+    "spine": "bone_1",
+    "spine2": "bone_2",
+    "chest": "bone_3",
+    "neck": "bone_4",
+    "head": "bone_5",
+
+    "shoulder.R": "bone_6",
+    "upperArm.R": "bone_7",
+    "foreArm.R": "bone_8",
+    "hand.R": "bone_9",
+    "shoulder.L": "bone_19",
+    "upperArm.L": "bone_20",
+    "foreArm.L": "bone_21",
+    "hand.L": "bone_22",
+
+    "upperLeg.R": "bone_32",
+    "lowerLeg.R": "bone_33",
+    "foot.R": "bone_34",
+    "toe.R": "bone_35",
+    "upperLeg.L": "bone_36",
+    "lowerLeg.L": "bone_37",
+    "foot.L": "bone_38",
+    "toe.L": "bone_39"
+  },
+  "extra": {
+    "_note": "right-hand fingers (10-18) and left-hand fingers (23-31) — three 3-segment digits per hand. Used for grip posing; not part of the canonical profile.",
+    "fingers.R": ["bone_10","bone_11","bone_12","bone_13","bone_14","bone_15","bone_16","bone_17","bone_18"],
+    "fingers.L": ["bone_23","bone_24","bone_25","bone_26","bone_27","bone_28","bone_29","bone_30","bone_31"]
+  }
+}

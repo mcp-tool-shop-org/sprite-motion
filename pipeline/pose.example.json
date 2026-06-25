@@ -1,0 +1,30 @@
+{
+  "_note": "A canonical pose is keyed by ROLE (not bone), as local Δ-quaternions relative to the roleProfile's reference rest (F4/F11/F12). It applies to ANY character via that character's roleMap, using the bind-pose-relative transfer (F4) + optional IK for grips/contacts (F5/F13). Rotations below are ILLUSTRATIVE placeholders — real ones are authored visually in the editor and exported. The combat key-pose set under _library is grounded in the combat-craft KB (attack beats: anticipation -> active/hit -> follow-through -> recovery).",
+  "format": "sprite-motion.pose",
+  "version": 1,
+  "name": "guard",
+  "blend": 1.0,
+  "space": "role-local-delta",
+  "roles": {
+    "spine":      [0.0, 0.0, 0.0, 1.0],
+    "chest":      [0.0, 0.0, 0.0, 1.0],
+    "upperArm.R": [0.0, 0.0, 0.0, 1.0],
+    "foreArm.R":  [0.0, 0.0, 0.0, 1.0],
+    "upperArm.L": [0.0, 0.0, 0.0, 1.0],
+    "foreArm.L":  [0.0, 0.0, 0.0, 1.0]
+  },
+  "ikGoals": {
+    "_note": "optional end-effector pins, solved per-character after rotation transfer (F5/F13). Use for weapon grip + foot plant. space: 'role' = relative to the character root.",
+    "hand.R": { "space": "role", "target": [0.18, 0.0, -0.08] }
+  },
+
+  "_library": {
+    "_note": "the canonical combat key-pose set to author in the editor (combat-craft KB). Each names its beat + the roles it emphasizes; quaternions filled at authoring time.",
+    "idle-ready":   { "beat": "neutral, idle-loop-compatible stance", "emphasis": ["spine","upperArm.R","upperArm.L"] },
+    "guard":        { "beat": "defensive ready; weapon raised, weight centered", "emphasis": ["chest","upperArm.R","foreArm.R","upperArm.L"] },
+    "anticipation": { "beat": "wind-up; pull back to telegraph the strike (the beat that sells weight)", "emphasis": ["spine","chest","upperArm.R","foreArm.R"] },
+    "strike":       { "beat": "active/hit frame; the clearest, most-exaggerated pose; weapon at contact", "emphasis": ["spine","chest","upperArm.R","foreArm.R","upperLeg.R"] },
+    "recovery":     { "beat": "follow-through settling to an idle-compatible end", "emphasis": ["spine","upperArm.R","upperArm.L"] },
+    "hurt":         { "beat": "stagger/recoil; full-body lean away from impact", "emphasis": ["hips","spine","chest","head"] }
+  }
+}

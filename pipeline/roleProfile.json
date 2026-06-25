@@ -1,0 +1,37 @@
+{
+  "_note": "The canonical role set (a Godot-SkeletonProfile-equivalent, grounded in posing-system-design.md F12). Authored once; every character binds to it via a roleMap, every canonical pose is keyed by these role names. The required humanoid roles match the editor's demo rig exactly (it IS the reference humanoid). Optional roles cover common extras + exotic non-humanoid appendages (poses target whatever roles a character actually has — F9).",
+  "format": "sprite-motion.roleProfile",
+  "version": 1,
+  "roles": [
+    { "role": "hips",        "parent": null,        "required": true },
+    { "role": "spine",       "parent": "hips",      "required": true },
+    { "role": "spine2",      "parent": "spine",     "required": false },
+    { "role": "chest",       "parent": "spine2",    "required": true,  "_fallbackParent": "spine" },
+    { "role": "neck",        "parent": "chest",     "required": true },
+    { "role": "head",        "parent": "neck",      "required": true },
+
+    { "role": "shoulder.R",  "parent": "chest",     "required": false },
+    { "role": "upperArm.R",  "parent": "shoulder.R","required": true,  "_fallbackParent": "chest" },
+    { "role": "foreArm.R",   "parent": "upperArm.R","required": true },
+    { "role": "hand.R",      "parent": "foreArm.R", "required": true },
+    { "role": "shoulder.L",  "parent": "chest",     "required": false },
+    { "role": "upperArm.L",  "parent": "shoulder.L","required": true,  "_fallbackParent": "chest" },
+    { "role": "foreArm.L",   "parent": "upperArm.L","required": true },
+    { "role": "hand.L",      "parent": "foreArm.L", "required": true },
+
+    { "role": "upperLeg.R",  "parent": "hips",      "required": true },
+    { "role": "lowerLeg.R",  "parent": "upperLeg.R","required": true },
+    { "role": "foot.R",      "parent": "lowerLeg.R","required": true },
+    { "role": "toe.R",       "parent": "foot.R",    "required": false },
+    { "role": "upperLeg.L",  "parent": "hips",      "required": true },
+    { "role": "lowerLeg.L",  "parent": "upperLeg.L","required": true },
+    { "role": "foot.L",      "parent": "lowerLeg.L","required": true },
+    { "role": "toe.L",       "parent": "foot.L",    "required": false },
+
+    { "role": "tail",        "parent": "hips",      "required": false, "_group": "exotic" },
+    { "role": "wing.R",      "parent": "chest",     "required": false, "_group": "exotic" },
+    { "role": "wing.L",      "parent": "chest",     "required": false, "_group": "exotic" },
+    { "role": "fin.R",       "parent": "foreArm.R", "required": false, "_group": "exotic" },
+    { "role": "fin.L",       "parent": "foreArm.L", "required": false, "_group": "exotic" }
+  ]
+}
