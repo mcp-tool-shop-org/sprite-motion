@@ -29,6 +29,15 @@ def arg(n, d=None): return argv[argv.index(n)+1] if n in argv else d
 PLACE = arg("--placement"); CHAR = arg("--char"); OUT = arg("--out")
 MANIFEST = arg("--manifest"); OUTDIR = arg("--outdir")
 ASSETS_CLI = dict(kv.split("=", 1) for kv in arg("--weapons", "").split(",") if "=" in kv)
+# --- deform-fix (the proven rigid-armor stack; default OFF so the existing path is byte-identical) ---
+# When ON, operate on a RAW UniRig rig: rigidify the rigid plate faces toward their dominant bone, leave the
+# cross-LIMB-joint seam rings soft, protect the rigid breastplate, then masked Corrective-Smooth (Delta-Mush,
+# BIND-at-rest) only those limb seams, then DQS bake. Closes the shoulder/hip/elbow candy-wrapper that ROM+DQS
+# alone leave. Measured: blackguard 6/6 key-poses pass the cross-family jury. (study-swarm wf_26e67746, 2026-06-26)
+DEFORM_FIX = ("--deform-fix" in argv)
+DF_RIGID = float(arg("--df-rigidify", "0.8")); DF_SMOOTH = float(arg("--df-smooth", "0.6"))
+DF_ITER = int(arg("--df-smooth-iter", "12")); DF_SCALE = float(arg("--df-smooth-scale", "1.08"))
+DF_REST = arg("--df-rest-source", "BIND"); DF_SEAM_LO = float(arg("--df-seam-lo", "0.18"))
 V = mathutils.Vector
 C = mathutils.Matrix.Rotation(math.radians(90), 4, 'X')   # glTF/three.js (Y-up) -> Blender (Z-up)
 P = json.load(open(PLACE, encoding="utf-8"))
@@ -243,6 +252,66 @@ def apply_role_pose(arm, pose, rolemap):
     bpy.ops.object.mode_set(mode='OBJECT')
     print(f"[posed-roles] {len(items)} role(s) {nstep} step(s): {[r for r, _ in items]}", flush=True)
 
+# --- deform-fix: the proven rigid-armor stack (study-swarm wf_26e67746, 2026-06-26) ----------------------
+# RIGID_BONES = rigid plate (rigidify targets); hips bone_0 = cloth anchor, excluded so cloth stays soft.
+_DF_RIGID_BONES = {"bone_1", "bone_2", "bone_3", "bone_6", "bone_7", "bone_8", "bone_9",
+                   "bone_13", "bone_14", "bone_15", "bone_16",
+                   "bone_20", "bone_21", "bone_22", "bone_23", "bone_24", "bone_25", "bone_26", "bone_27"}
+# LIMB joints get the soft-seam + Corrective-Smooth treatment (deltoid/elbow/hip-crease/knee). The rigid
+# BREASTPLATE (spine-dominated verts) is NEVER smoothed — CS melts it under twist; it rigidifies as a unit.
+_DF_LIMB_JOINTS = [({"bone_6"}, "bone_7"), ({"bone_13"}, "bone_14"), ({"bone_7"}, "bone_8"),
+                   ({"bone_14"}, "bone_15"), ({"bone_0"}, "bone_20"), ({"bone_0"}, "bone_24"),
+                   ({"bone_20"}, "bone_21"), ({"bone_24"}, "bone_25")]
+_DF_BREASTPLATE = {"bone_1", "bone_2", "bone_3"}
+
+def deform_fix(arm, m):
+    """Prepare the rigid-armor deform stack on a RAW UniRig rig BEFORE posing: compute the cross-limb-joint
+    SEAM mask, rigidify the plate faces toward their dominant bone (seams + cloth excluded), then add a masked
+    Corrective-Smooth (Delta-Mush; BIND-at-rest) on the seams. The bake (depsgraph) then evaluates
+    Armature(DQS) -> CorrectiveSmooth as a unit. Closes the shoulder/hip/elbow candy-wrapper ROM+DQS leave."""
+    name2gi = {g.name: g.index for g in m.vertex_groups}; gi2name = {g.index: g.name for g in m.vertex_groups}
+    JG = [({name2gi[b] for b in prox if b in name2gi}, name2gi.get(dist)) for prox, dist in _DF_LIMB_JOINTS]
+    BP = {name2gi[b] for b in _DF_BREASTPLATE if b in name2gi}
+    seam = [0.0] * len(m.data.vertices)
+    for vi, v in enumerate(m.data.vertices):
+        w = {g.group: g.weight for g in v.groups if g.weight > 1e-4}
+        if not w: continue
+        if max(w, key=w.get) in BP: continue                       # protect the rigid breastplate
+        best = 0.0
+        for prox_gi, dist_gi in JG:
+            if dist_gi is None: continue
+            best = max(best, min(w.get(dist_gi, 0.0), sum(w.get(g, 0.0) for g in prox_gi)))
+        seam[vi] = min(1.0, 2.0 * best)
+    nseam = sum(1 for s in seam if s > DF_SEAM_LO)
+    print(f"[deform-fix] seam verts(>{DF_SEAM_LO})={nseam} ({100*nseam/max(1,len(seam)):.0f}%)", flush=True)
+    if DF_RIGID > 0:                                                # rigidify PLATE faces (seams stay soft)
+        bpy.ops.object.select_all(action='DESELECT'); m.select_set(True); bpy.context.view_layer.objects.active = m
+        bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.ops.object.vertex_group_limit_total(limit=4); bpy.ops.object.vertex_group_normalize_all(lock_active=False)
+        for vi, v in enumerate(m.data.vertices):
+            if seam[vi] >= DF_SEAM_LO: continue
+            gs = [(g.group, g.weight) for g in v.groups if g.weight > 1e-4]
+            if not gs: continue
+            dg, dw = max(gs, key=lambda t: t[1])
+            if gi2name.get(dg, "") in _DF_RIGID_BONES and dw < 0.98:
+                for g in v.groups:
+                    g.weight = dw + (1.0 - dw) * DF_RIGID if g.group == dg else g.weight * (1 - DF_RIGID)
+        bpy.ops.object.vertex_group_normalize_all(lock_active=False)
+    if DF_SMOOTH > 0:                                               # masked Corrective Smooth on the seams
+        if "seam" in m.vertex_groups: m.vertex_groups.remove(m.vertex_groups["seam"])
+        vg = m.vertex_groups.new(name="seam")
+        for vi, s in enumerate(seam):
+            if s > 1e-3: vg.add([vi], min(1.0, s), 'REPLACE')
+        cs = m.modifiers.new(name="corrective_smooth", type='CORRECTIVE_SMOOTH')
+        cs.smooth_type = 'LENGTH_WEIGHTED'; cs.factor = DF_SMOOTH; cs.iterations = DF_ITER
+        cs.scale = DF_SCALE; cs.use_pin_boundary = True; cs.rest_source = DF_REST; cs.vertex_group = "seam"
+        if DF_REST == 'BIND':                                       # bind while the armature is at REST (un-posed)
+            bpy.ops.object.select_all(action='DESELECT'); m.select_set(True); bpy.context.view_layer.objects.active = m
+            bpy.ops.object.mode_set(mode='OBJECT')
+            try: bpy.ops.object.correctivesmooth_bind(modifier="corrective_smooth")
+            except Exception as e: print(f"[deform-fix] CS bind warn: {e}", flush=True)
+        print(f"[deform-fix] corrective-smooth factor={DF_SMOOTH} iter={DF_ITER} scale={DF_SCALE} rest={DF_REST}", flush=True)
+
 def rig_character(char_glb, block, assets, out):
     bpy.ops.wm.read_factory_settings(use_empty=True)
     bpy.ops.import_scene.gltf(filepath=char_glb)
@@ -256,16 +325,25 @@ def rig_character(char_glb, block, assets, out):
     zs = [(charmesh.matrix_world @ v.co).z for v in charmesh.data.vertices]; figureH = max(zs) - min(zs)
     print(f"[char] {os.path.basename(char_glb)}  figureH={figureH:.3f}  weapons={len(block.get('weapons', []))}  pose={'yes' if block.get('pose',{}).get('bones') else 'no'}", flush=True)
     _pose = block.get("pose") or {}                                       # pose BEFORE weapons (they ride the posed hand)
+    if DEFORM_FIX and _pose.get("roleRotations"):                         # rigidify + masked Corrective-Smooth(BIND@rest), BEFORE posing
+        deform_fix(arm, charmesh)
     if _pose.get("roleRotations"): apply_role_pose(arm, _pose, block.get("roleMap", {}))
     else: apply_pose(arm, _pose)
     if _pose.get("roleRotations") or _pose.get("bones"):                  # bake the posed deformation into the mesh so the export carries it
         for _m in [o for o in bpy.context.scene.objects if o.type == "MESH"]:
             _am = [md for md in _m.modifiers if md.type == "ARMATURE"]
-            if _am:
-                _am[0].use_deform_preserve_volume = True                  # DQS bake: dual-quaternion skinning avoids the LBS candy-wrapper collapse
+            if not _am: continue
+            _am[0].use_deform_preserve_volume = True                      # DQS bake: dual-quaternion skinning avoids the LBS candy-wrapper collapse
+            if DEFORM_FIX:                                                 #   (Kavan et al. 2008, DOI 10.1145/1409625.1409627). UniRig emits standard LBS
+                deps = bpy.context.evaluated_depsgraph_get()              #   weights (arXiv:2504.12451) -> ROM cap + DQS + rigidify + masked Corrective-Smooth.
+                baked = bpy.data.meshes.new_from_object(_m.evaluated_get(deps))   # depsgraph bakes Armature(DQS)->CorrectiveSmooth as a unit
+                _m.modifiers.clear(); _old = _m.data; _m.data = baked
+                try: bpy.data.meshes.remove(_old)
+                except Exception: pass
+            else:
                 bpy.ops.object.select_all(action='DESELECT'); _m.select_set(True); bpy.context.view_layer.objects.active = _m
-                try: bpy.ops.object.modifier_apply(modifier=_am[0].name)   #   at bent joints (Kavan et al. 2008, DOI 10.1145/1409625.1409627). UniRig emits standard LBS
-                except Exception as e: print(f"[pose] modifier_apply warn: {e}", flush=True)   #   weights (arXiv:2504.12451), so the raw bake tears the elbow past ~85deg; ROM is capped in the pose too.
+                try: bpy.ops.object.modifier_apply(modifier=_am[0].name)
+                except Exception as e: print(f"[pose] modifier_apply warn: {e}", flush=True)
     for w in block.get("weapons", []):
         if "grip" in w: place_on_hand(w, arm, assets, block.get("roleMap", {}), figureH)   # Claude/MCP: weapon rides the POSED hand
         elif "rootTransform" in w: place_v4(w, arm, assets)
